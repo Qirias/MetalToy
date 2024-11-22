@@ -32,30 +32,37 @@ void Camera::processKeyboardInput(GLFWwindow* window, float deltaTime) {
 	float velocity = movementSpeed * deltaTime;
 	bool moved = false;
 	
-	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+	if (glfwGetKey(window, keys.moveForward) == GLFW_PRESS) {
 		position += front * velocity;
 		moved = true;
 	}
-	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+	if (glfwGetKey(window, keys.moveBackward) == GLFW_PRESS) {
 		position -= front * velocity;
 		moved = true;
 	}
-	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+	if (glfwGetKey(window, keys.moveLeft) == GLFW_PRESS) {
 		position -= right * velocity;
 		moved = true;
 	}
-	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+	if (glfwGetKey(window, keys.moveRight) == GLFW_PRESS) {
 		position += right * velocity;
 		moved = true;
 	}
-	if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
+	if (glfwGetKey(window, keys.moveUp) == GLFW_PRESS) {
 		position += up * velocity;
 		moved = true;
 	}
-	if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
+	if (glfwGetKey(window, keys.moveDown) == GLFW_PRESS) {
 		position -= up * velocity;
 		moved = true;
 	}
+
+	// Detect digits 0-9 and store their state in a bitmask
+    for (int i = GLFW_KEY_0; i <= GLFW_KEY_9; ++i) {
+        if (glfwGetKey(window, i) == GLFW_PRESS) {
+            keys.digits |= (1 << (i - GLFW_KEY_0));
+        }
+    }
 	
 	// Update view matrix only if the camera moved
 	if (moved) {

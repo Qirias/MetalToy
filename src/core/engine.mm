@@ -197,6 +197,10 @@ void Engine::updateWorldState(bool isPaused) {
 	frameData->framebuffer_height = (uint)metalLayer.drawableSize.height;
 
 	frameData->time = glfwGetTime();
+
+    frameData->mouseCoords = simd::float2{(float)camera.getLastX(), (float)camera.getLastY()};
+	frameData->keyboardDigits = camera.getKeys().digits;
+    
 }
 
 

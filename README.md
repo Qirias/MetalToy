@@ -1,5 +1,5 @@
 # MetalToy
-My new go to renderer because MoltenVK is missing stuff.
+Texture on a full-screen triangle renderer.
 
 ## Build Instructions
 ### Prerequisites

@@ -3,6 +3,7 @@
 using namespace metal;
 
 #include "shaderTypes.hpp"
+#include "more.metal"
 
 struct VertexOut {
     float4 position [[position]];
@@ -37,11 +38,12 @@ kernel void compute_function(   texture2d<half, access::write>  output      [[te
 
     uint width = output.get_width();
     uint height = output.get_height();
+
+    float2 iMouse = frameData.mouseCoords / float2(width, height);
     
     float2 uv = float2(gid) / float2(width, height);
     uv = uv * 2.0 - 1.0;  // Normalize to [-1, 1]
     
-    // Example: Procedural color based on UV and time
-    half3 color = half3(uv.x + 0.5, uv.y + 0.5, sin(frameData.time));
+    half3 color = half3(iMouse.x, iMouse.y, sin(frameData.time));
     output.write(half4(color, 1.0), gid);
 }
