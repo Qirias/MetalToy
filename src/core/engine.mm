@@ -158,7 +158,6 @@ void Engine::createBuffers() {
 }
 
 void Engine::createDefaultLibrary() {
-    // Create an NSString from the metallib path
     NS::String* libraryPath = NS::String::string(
         SHADER_METALLIB,
         NS::UTF8StringEncoding
@@ -197,10 +196,15 @@ void Engine::updateWorldState(bool isPaused) {
 	frameData->framebuffer_height = (uint)metalLayer.drawableSize.height;
 
 	frameData->time = glfwGetTime();
+	
+	frameData->prevMouse = frameData->mouseCoords.xy;
+    frameData->mouseCoords.xy = simd::float2{(float)camera.getLastX(), frameData->framebuffer_height - (float)camera.getLastY()};
 
-    frameData->mouseCoords = simd::float2{(float)camera.getLastX(), (float)camera.getLastY()};
+	frameData->mouseCoords.w = frameData->mouseCoords.z;
+	frameData->mouseCoords.z = camera.mousePressed;
+
 	frameData->keyboardDigits = camera.getKeys().digits;
-    
+	frameData->frameCount = frameNumber;
 }
 
 
@@ -307,7 +311,9 @@ void Engine::performComputePass(MTL::ComputeCommandEncoder* computeEncoder) {
 void Engine::drawTexture(MTL::RenderCommandEncoder* renderCommandEncoder) {
     renderCommandEncoder->pushDebugGroup(NS::String::string("Draw Frame", NS::ASCIIStringEncoding));
     renderCommandEncoder->setRenderPipelineState(pipelineState);
-    renderCommandEncoder->setFragmentTexture(screenTexture, 0);  // Use compute shader output
+    
+    renderCommandEncoder->setFragmentTexture(screenTexture, 0);
+
     renderCommandEncoder->setFragmentSamplerState(samplerState, 0);
     renderCommandEncoder->setVertexBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
     renderCommandEncoder->setFragmentBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
@@ -316,7 +322,6 @@ void Engine::drawTexture(MTL::RenderCommandEncoder* renderCommandEncoder) {
 }
 
 void Engine::draw() {
-    // Compute pass
     MTL::CommandBuffer* computeCommandBuffer = beginFrame(false);
     if (computeCommandBuffer) {
         MTL::ComputeCommandEncoder* computeEncoder = computeCommandBuffer->computeCommandEncoder();
@@ -324,10 +329,9 @@ void Engine::draw() {
             performComputePass(computeEncoder);
             computeEncoder->endEncoding();
         }
-        computeCommandBuffer->commit();  // Start compute work immediately
+        computeCommandBuffer->commit();
     }
     
-    // Rendering texture
     MTL::CommandBuffer* renderCommandBuffer = beginDrawableCommands();
     updateRenderPassDescriptor();
     

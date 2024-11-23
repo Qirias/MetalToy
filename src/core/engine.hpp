@@ -95,8 +95,8 @@ private:
     MTL::CommandQueue*          metalCommandQueue;
 
 	// Render Pipeline States
-    MTL::RenderPipelineState*    pipelineState;
-     MTL::ComputePipelineState*  computePipelineState;
+    MTL::RenderPipelineState*       pipelineState;
+    MTL::ComputePipelineState*      computePipelineState;
 
     MTL::SamplerState*          samplerState;
 

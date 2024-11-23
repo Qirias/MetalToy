@@ -57,6 +57,7 @@ void Camera::processKeyboardInput(GLFWwindow* window, float deltaTime) {
 		moved = true;
 	}
 
+	keys.digits = 0;
 	// Detect digits 0-9 and store their state in a bitmask
     for (int i = GLFW_KEY_0; i <= GLFW_KEY_9; ++i) {
         if (glfwGetKey(window, i) == GLFW_PRESS) {
@@ -79,11 +80,13 @@ void Camera::processMouseButton(GLFWwindow* window, int button, int action) {
     if (button == GLFW_MOUSE_BUTTON_LEFT) {
         if (action == GLFW_PRESS) {
             isDragging = true;
+			mousePressed = 1.0f;
 
             // Store the current cursor position as the last position
             glfwGetCursorPos(window, &lastX, &lastY);
         } else if (action == GLFW_RELEASE) {
             isDragging = false;
+			mousePressed = 0.0f;
         }
     }
 }

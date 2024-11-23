@@ -50,6 +50,7 @@ public:
 
 	void setFrustumCornersWorldSpace(simd::float3* frustumCorners, float nearZ, float farZ);
 
+    float mousePressed;
 private:
     KeyMappings keys{};
 
