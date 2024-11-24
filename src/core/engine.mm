@@ -78,6 +78,10 @@ void Engine::resizeFrameBuffer(int width, int height) {
 		screenTexture->release();
 		screenTexture = nullptr;
 	}
+	if (drawingTexture) {
+		drawingTexture->release();
+		drawingTexture = nullptr;
+	}
 	
 	// Recreate G-buffer textures and descriptors
 	createRenderPassDescriptor();
@@ -274,9 +278,11 @@ void Engine::createRenderPassDescriptor() {
         metalLayer.drawableSize.height,
         false
     );
+
     textureDesc->setUsage(MTL::TextureUsageShaderWrite | MTL::TextureUsageShaderRead);
     textureDesc->setStorageMode(MTL::StorageModePrivate);  // GPU-only access
     screenTexture = metalDevice->newTexture(textureDesc);
+	drawingTexture = metalDevice->newTexture(textureDesc);
 }
 
 void Engine::updateRenderPassDescriptor() {
@@ -294,6 +300,7 @@ void Engine::performComputePass(MTL::ComputeCommandEncoder* computeEncoder) {
     
     // Set the output texture that will be used by the render pass
     computeEncoder->setTexture(screenTexture, 0);
+	computeEncoder->setTexture(drawingTexture, 1);
     computeEncoder->setBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
     
     // Calculate dispatch size

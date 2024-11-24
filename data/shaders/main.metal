@@ -26,7 +26,6 @@ fragment half4 fragment_function(   VertexOut       in              [[stage_in]]
                                     texture2d<half> screenTexture   [[texture(0)]],
                                     sampler         samplerState    [[sampler(0)]]) {
                                         
-    // Simple texture sampling
     half4 texColor = screenTexture.sample(samplerState, in.texCoords);
     return texColor;
 }
@@ -112,8 +111,8 @@ static half4 draw(float2 uv
     return col;
 }
 
-half4 rayMarch(float2 uv, float2 resolution, texture2d<half, access::read_write> outputTexture) {
-    half4 light = sampleTexture(outputTexture, uv);
+half4 rayMarch(float2 uv, float2 resolution, texture2d<half, access::read_write> drawingTexture) {
+    half4 light = sampleTexture(drawingTexture, uv);
     
     if (light.a > 0.1) {
         return light;
@@ -136,8 +135,8 @@ half4 rayMarch(float2 uv, float2 resolution, texture2d<half, access::read_write>
         for (int step = 0; step < maxSteps; step++) {
             if (outOfBounds(sampleUV)) break;
             
-            half4 sampleLight = sampleTexture(outputTexture, sampleUV);
-            if (sampleLight.a > 0.1) {
+            half4 sampleLight = sampleTexture(drawingTexture, sampleUV);
+            if (sampleLight.a > 0.5) {
                 radiance += sampleLight;
                 break;
             }
@@ -146,15 +145,16 @@ half4 rayMarch(float2 uv, float2 resolution, texture2d<half, access::read_write>
         }
     }
     
-    return radiance * oneOverRayCount;       
+    return radiance * oneOverRayCount;
 }
 
-kernel void compute_function(   texture2d<half, access::read_write> outputTexture  [[texture(0)]],
-                    constant    FrameData&                          frameData      [[buffer(BufferIndexFrameData)]],
-                                uint2                               gid            [[thread_position_in_grid]]) {
+kernel void compute_function(   texture2d<half, access::read_write> outputTexture   [[texture(0)]],
+                                texture2d<half, access::read_write> drawingTexture  [[texture(1)]],
+                    constant    FrameData&                          frameData       [[buffer(BufferIndexFrameData)]],
+                                uint2                               gid             [[thread_position_in_grid]]) {
 
-    uint width = outputTexture.get_width();
-    uint height = outputTexture.get_height();
+    uint width = drawingTexture.get_width();
+    uint height = drawingTexture.get_height();
 
     float2 normalizedCurrMouse = frameData.mouseCoords.xy / float2(width, height);
     float2 normalizedPrevMouse = frameData.prevMouse / float2(width, height);
@@ -162,6 +162,7 @@ kernel void compute_function(   texture2d<half, access::read_write> outputTextur
 
     if (frameData.frameCount < 1) {
         outputTexture.write(half4(0.0, 0.0, 0.0, 0.0), gid);
+        drawingTexture.write(half4(0.0, 0.0, 0.0, 0.0), gid);
         return;
     }
 
@@ -170,14 +171,15 @@ kernel void compute_function(   texture2d<half, access::read_write> outputTextur
     //     return;
     // }
     
-    half4 currentColor = outputTexture.read(gid);
+    half4 currentColor = drawingTexture.read(gid);
 
     half4 newColor = draw(uv, normalizedCurrMouse, normalizedPrevMouse, 
                           frameData.mouseCoords.z, frameData.mouseCoords.w, 
                           currentColor, frameData.keyboardDigits);
+    drawingTexture.write(newColor, gid);
     
 
-    half4 rayMarchedColor = rayMarch(uv, float2(width, height), outputTexture);
+    half4 rayMarchedColor = rayMarch(uv, float2(width, height), drawingTexture);
     
     rayMarchedColor = tonemap(rayMarchedColor);
     rayMarchedColor = gammaCorrect(rayMarchedColor);

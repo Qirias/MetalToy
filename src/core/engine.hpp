@@ -90,6 +90,7 @@ private:
     MTL::RenderPassDescriptor*  renderPassDescriptor;
 
     MTL::Texture*               screenTexture;
+    MTL::Texture*               drawingTexture;
 
     MTL::Library*               metalDefaultLibrary;
     MTL::CommandQueue*          metalCommandQueue;
