@@ -7,15 +7,22 @@ struct FrameData {
 	uint keyboardDigits;   						// 4 bytes  (offset: 16)
 	simd::float4 mouseCoords;                   // 16 bytes (offset: 32)
 	float2 prevMouse;							// 8 bytes  (offset: 40)
-	uint frameCount;							// 4 bytes  (offset: 44)
+	uint64_t frameCount;						// 8 bytes  (offset: 48)
+};
+
+struct JFAParams {
+    float2 oneOverSize;
+    float uOffset;
+    bool skip;
 };
 
 typedef enum BufferIndex {
-	BufferIndexFrameData = 0
+	BufferIndexFrameData = 0,
+	BufferIndexJFAParams = 1
 } BufferIndex;
 
 typedef enum TextureIndex {
 	TextureIndexDrawing = 0,
-	TextudeIndexJFA = 1,
+	TextureIndexJFA = 1,
 	TextureIndexScreen = 2
 } TextureIndex;

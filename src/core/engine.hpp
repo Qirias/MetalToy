@@ -47,8 +47,11 @@ private:
 	
     void draw();
     void presentTexture(MTL::RenderCommandEncoder* renderCommandEncoder);
+
+    // Compute passes
     void drawTexture(MTL::CommandBuffer* computeCommandBuffer);
-    void performComputePass(MTL::CommandBuffer* computeCommandBuffer);
+    void performJFA(MTL::CommandBuffer* computeCommandBuffer);
+    void performComposition(MTL::CommandBuffer* computeCommandBuffer);
 
 	void createRenderPassDescriptor();
 
@@ -71,6 +74,7 @@ private:
 	
 	// Buffers used to store dynamically changing per-frame data
 	MTL::Buffer* 		frameDataBuffers[MaxFramesInFlight];
+    MTL::Buffer*        jfaOffsetBuffer;
 
     MTL::Device*        metalDevice;
     GLFWwindow*         glfwWindow;
@@ -100,6 +104,7 @@ private:
 	// Render Pipeline States
     MTL::RenderPipelineState*       pipelineState;
     MTL::ComputePipelineState*      drawingComputePipelineState;
+    MTL::ComputePipelineState*      jfaComputePipelineState;
     MTL::ComputePipelineState*      compositionComputePipelineState;
 
     MTL::SamplerState*          samplerState;

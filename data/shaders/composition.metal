@@ -42,6 +42,7 @@ half4 rayMarch(float2 uv, float2 resolution, texture2d<half, access::read_write>
 }
 
 kernel void compute_composition(    texture2d<half, access::read_write> outputTexture   [[texture(TextureIndexScreen)]],
+									texture2d<half, access::read_write> jfaTexture  	[[texture(TextureIndexJFA)]],
                                     texture2d<half, access::read_write> drawingTexture  [[texture(TextureIndexDrawing)]],
                         constant    FrameData&                          frameData       [[buffer(BufferIndexFrameData)]],
                                     uint2                               gid             [[thread_position_in_grid]]) {
@@ -67,13 +68,15 @@ kernel void compute_composition(    texture2d<half, access::read_write> outputTe
     
     half4 rayMarchedColor = rayMarch(uv, float2(width, height), drawingTexture);
     
-    rayMarchedColor = tonemap(rayMarchedColor);
+//    rayMarchedColor = tonemap(rayMarchedColor);
     rayMarchedColor = gammaCorrect(rayMarchedColor);
     
     half4 finalColor = mix(drawingColor, rayMarchedColor, rayMarchedColor.a);
 
-    // float alpha = sampleTexture(drawingTexture, uv).a;
+	// float2 nearestSeed = float2(sampleTexture(jfaTexture, uv).xy);
+	// // Clamp by the size of our texture (1.0 in uv space).
+	// float dist = clamp(distance(uv, nearestSeed), 0.0, 1.0);
+	// outputTexture.write(half4(dist, dist, dist, 1.0), gid);
 
-    // outputTexture.write(half4(uv.x * alpha, uv.y * alpha, 0.0, 1.0), gid);
     outputTexture.write(finalColor, gid);
 }

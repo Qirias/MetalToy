@@ -46,6 +46,7 @@ void Engine::cleanup() {
 	for(uint8_t i = 0; i < MaxFramesInFlight; i++) {
 		frameDataBuffers[i]->release();
     }
+	jfaOffsetBuffer->release();
 	
 	drawingTexture->release();
 	jfaTexture->release();
@@ -53,6 +54,7 @@ void Engine::cleanup() {
 	renderPassDescriptor->release();
     pipelineState->release();
 	drawingComputePipelineState->release();
+	jfaComputePipelineState->release();
 	compositionComputePipelineState->release();
     metalDevice->release();
 }
@@ -79,18 +81,9 @@ void Engine::cursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
 void Engine::resizeFrameBuffer(int width, int height) {
     metalLayer.drawableSize = CGSizeMake(width, height);
     // Deallocate the textures if they have been created
-	if (screenTexture) {
-		screenTexture->release();
-		screenTexture = nullptr;
-	}
-	if (drawingTexture) {
-		drawingTexture->release();
-		drawingTexture = nullptr;
-	}
-	if (jfaTexture) {
-		jfaTexture->release();
-		jfaTexture = nullptr;
-	}
+	if (screenTexture) { screenTexture->release(); 		screenTexture = nullptr; }
+	if (drawingTexture) { drawingTexture->release(); 	drawingTexture = nullptr; }
+	if (jfaTexture) { jfaTexture->release(); 			jfaTexture = nullptr; }
 	
 	// Recreate G-buffer textures and descriptors
 	createRenderPassDescriptor();
@@ -167,7 +160,7 @@ void Engine::endFrame(MTL::CommandBuffer* commandBuffer, MTL::Drawable* currentD
 }
 
 void Engine::createBuffers() {
-    
+    jfaOffsetBuffer = metalDevice->newBuffer(sizeof(JFAParams), MTL::ResourceStorageModeShared);
 }
 
 void Engine::createDefaultLibrary() {
@@ -264,6 +257,17 @@ void Engine::createRenderPipelines() {
         computeFunction->release();
     }
 
+	#pragma mark jfa compute pipeline setup
+    {
+        MTL::Function* computeFunction = metalDefaultLibrary->newFunction(NS::String::string("compute_jfa", NS::ASCIIStringEncoding));
+        assert(computeFunction && "Failed to load jfa compute function!");
+
+        jfaComputePipelineState = metalDevice->newComputePipelineState(computeFunction, &error);
+        assert(error == nil && "Failed to create jfa compute pipeline state!");
+
+        computeFunction->release();
+    }
+
     #pragma mark composition compute pipeline setup
     {
         MTL::Function* computeFunction = metalDefaultLibrary->newFunction(NS::String::string("compute_composition", NS::ASCIIStringEncoding));
@@ -302,6 +306,7 @@ void Engine::createRenderPassDescriptor() {
     textureDesc->setUsage(MTL::TextureUsageShaderWrite | MTL::TextureUsageShaderRead);
     textureDesc->setStorageMode(MTL::StorageModePrivate);  // GPU-only access
     screenTexture = metalDevice->newTexture(textureDesc);
+	jfaTexture = metalDevice->newTexture(textureDesc);
 	drawingTexture = metalDevice->newTexture(textureDesc);
 }
 
@@ -314,14 +319,15 @@ void Engine::updateRenderPassDescriptor() {
     renderPassDescriptor->colorAttachments()->object(0)->setTexture(metalDrawable->texture());
 }
 
-void Engine::performComputePass(MTL::CommandBuffer* computeCommandBuffer) {
+void Engine::performComposition(MTL::CommandBuffer* computeCommandBuffer) {
 	MTL::ComputeCommandEncoder* computeEncoder = computeCommandBuffer->computeCommandEncoder();
 
-    computeEncoder->pushDebugGroup(NS::String::string("Compute Pass", NS::ASCIIStringEncoding));
+    computeEncoder->pushDebugGroup(NS::String::string("Composition Compute Pass", NS::ASCIIStringEncoding));
     computeEncoder->setComputePipelineState(compositionComputePipelineState);
     
     // Set the output texture that will be used by the render pass
     computeEncoder->setTexture(screenTexture, TextureIndexScreen);
+	computeEncoder->setTexture(jfaTexture, TextureIndexJFA);
 	computeEncoder->setTexture(drawingTexture, TextureIndexDrawing);
     computeEncoder->setBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
     
@@ -360,6 +366,78 @@ void Engine::drawTexture(MTL::CommandBuffer* computeCommandBuffer) {
 	computeEncoder->endEncoding();
 }
 
+void Engine::performJFA(MTL::CommandBuffer* computeCommandBuffer) {
+	MTL::ComputeCommandEncoder* computeEncoder = computeCommandBuffer->computeCommandEncoder();
+
+	computeEncoder->pushDebugGroup(NS::String::string("Jump Flood Algorithm Pass", NS::ASCIIStringEncoding));
+	computeEncoder->setComputePipelineState(jfaComputePipelineState);
+
+	MTL::TextureDescriptor* desc = MTL::TextureDescriptor::texture2DDescriptor(
+		jfaTexture->pixelFormat(), 
+		jfaTexture->width(), 
+		jfaTexture->height(), 
+	    false
+	);
+
+	desc->setUsage(MTL::TextureUsageShaderRead | MTL::TextureUsageShaderWrite);
+    MTL::Texture* renderA = metalDevice->newTexture(desc);
+    MTL::Texture* renderB = metalDevice->newTexture(desc);
+
+    MTL::Texture* currentInput = drawingTexture;
+    MTL::Texture* currentOutput = renderA;
+	
+	int passes = ceil(log2(max(float(jfaTexture->width()), float(jfaTexture->height()))));
+
+	JFAParams* params = static_cast<JFAParams*>(jfaOffsetBuffer->contents());
+	params->oneOverSize = simd::float2{1.0f / jfaTexture->width(), 1.0f / jfaTexture->height()};
+
+	for (int i = 0; i < passes || (passes == 0 && i == 0); ++i) {
+		params->uOffset = pow(2.0, passes - i - 1);
+		params->skip = (passes == 0);
+
+		computeEncoder->setTexture(currentInput, TextureIndexDrawing);
+		computeEncoder->setTexture(currentOutput, TextureIndexJFA);
+		computeEncoder->setBuffer(jfaOffsetBuffer, 0, BufferIndexJFAParams);
+
+		MTL::Size threadGroupSize = MTL::Size(16, 16, 1);
+		MTL::Size gridSize = MTL::Size(
+			(currentInput->width() + threadGroupSize.width - 1) / threadGroupSize.width,
+			(currentInput->height() + threadGroupSize.height - 1) / threadGroupSize.height,
+			1
+		);
+
+		computeEncoder->dispatchThreadgroups(gridSize, threadGroupSize);
+
+        currentInput = currentOutput;
+        currentOutput = (currentOutput == renderA) ? renderB : renderA;
+	}
+
+	computeEncoder->popDebugGroup();
+	computeEncoder->endEncoding();
+	// Copy the final result to jfaTexture
+	  MTL::BlitCommandEncoder* blitEncoder = computeCommandBuffer->blitCommandEncoder();
+	  MTL::Origin origin = MTL::Origin(0, 0, 0);
+	  MTL::Size size = MTL::Size(jfaTexture->width(), jfaTexture->height(), 1);
+	  
+	  blitEncoder->copyFromTexture(
+		  currentInput, // Source is the last currentInput (either renderA or renderB)
+		  0,            // source level
+		  0,            // source slice
+		  origin,       // source origin
+		  size,         // source size
+		  jfaTexture,   // Destination is always jfaTexture
+		  0,            // destination level
+		  0,            // destination slice
+		  origin        // destination origin
+	  );
+	  
+	  blitEncoder->endEncoding();
+
+	renderA->release();
+	renderB->release();
+}
+
+
 void Engine::presentTexture(MTL::RenderCommandEncoder* renderCommandEncoder) {
     renderCommandEncoder->pushDebugGroup(NS::String::string("Draw Frame", NS::ASCIIStringEncoding));
     renderCommandEncoder->setRenderPipelineState(pipelineState);
@@ -377,7 +455,8 @@ void Engine::draw() {
     MTL::CommandBuffer* computeCommandBuffer = beginFrame(false);
     if (computeCommandBuffer) {
 		drawTexture(computeCommandBuffer);
-		performComputePass(computeCommandBuffer);
+		performJFA(computeCommandBuffer);
+		performComposition(computeCommandBuffer);
         computeCommandBuffer->commit();
     }
     
