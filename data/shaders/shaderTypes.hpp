@@ -10,7 +10,12 @@ struct FrameData {
 	uint frameCount;							// 4 bytes  (offset: 44)
 };
 
-typedef enum BufferIndex
-{
+typedef enum BufferIndex {
 	BufferIndexFrameData = 0
 } BufferIndex;
+
+typedef enum TextureIndex {
+	TextureIndexDrawing = 0,
+	TextudeIndexJFA = 1,
+	TextureIndexScreen = 2
+} TextureIndex;

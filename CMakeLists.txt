@@ -51,6 +51,8 @@ foreach(SHADER_SOURCE ${SHADER_SOURCES})
                 -c ${SHADER_SOURCE}
                 -o ${SHADER_AIR}
                 -I ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+                -Wno-unused-variable
+                -Wno-unused-function
         DEPENDS ${SHADER_SOURCE}  # Add each shader source as a dependency
         COMMENT "Compiling ${SHADER_NAME}.metal to AIR"
     )

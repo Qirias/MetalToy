@@ -46,8 +46,9 @@ private:
     void updateWorldState(bool isPaused);
 	
     void draw();
-    void drawTexture(MTL::RenderCommandEncoder* renderCommandEncoder);
-    void performComputePass(MTL::ComputeCommandEncoder* computeEncoder);
+    void presentTexture(MTL::RenderCommandEncoder* renderCommandEncoder);
+    void drawTexture(MTL::CommandBuffer* computeCommandBuffer);
+    void performComputePass(MTL::CommandBuffer* computeCommandBuffer);
 
 	void createRenderPassDescriptor();
 
@@ -89,15 +90,17 @@ private:
     // Renderpass descriptors
     MTL::RenderPassDescriptor*  renderPassDescriptor;
 
-    MTL::Texture*               screenTexture;
     MTL::Texture*               drawingTexture;
+    MTL::Texture*               jfaTexture;
+    MTL::Texture*               screenTexture;
 
     MTL::Library*               metalDefaultLibrary;
     MTL::CommandQueue*          metalCommandQueue;
 
 	// Render Pipeline States
     MTL::RenderPipelineState*       pipelineState;
-    MTL::ComputePipelineState*      computePipelineState;
+    MTL::ComputePipelineState*      drawingComputePipelineState;
+    MTL::ComputePipelineState*      compositionComputePipelineState;
 
     MTL::SamplerState*          samplerState;
 

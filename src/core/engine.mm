@@ -47,8 +47,13 @@ void Engine::cleanup() {
 		frameDataBuffers[i]->release();
     }
 	
+	drawingTexture->release();
+	jfaTexture->release();
+	screenTexture->release();
 	renderPassDescriptor->release();
     pipelineState->release();
+	drawingComputePipelineState->release();
+	compositionComputePipelineState->release();
     metalDevice->release();
 }
 
@@ -81,6 +86,10 @@ void Engine::resizeFrameBuffer(int width, int height) {
 	if (drawingTexture) {
 		drawingTexture->release();
 		drawingTexture = nullptr;
+	}
+	if (jfaTexture) {
+		jfaTexture->release();
+		jfaTexture = nullptr;
 	}
 	
 	// Recreate G-buffer textures and descriptors
@@ -244,13 +253,24 @@ void Engine::createRenderPipelines() {
 		fragmentFunction->release();
     }
 
-    #pragma mark compute pipeline setup
+	#pragma mark drawing compute pipeline setup
     {
-        MTL::Function* computeFunction = metalDefaultLibrary->newFunction(NS::String::string("compute_function", NS::ASCIIStringEncoding));
-        assert(computeFunction && "Failed to load compute function!");
+        MTL::Function* computeFunction = metalDefaultLibrary->newFunction(NS::String::string("compute_drawing", NS::ASCIIStringEncoding));
+        assert(computeFunction && "Failed to load drawing compute function!");
 
-        computePipelineState = metalDevice->newComputePipelineState(computeFunction, &error);
-        assert(error == nil && "Failed to create compute pipeline state!");
+        drawingComputePipelineState = metalDevice->newComputePipelineState(computeFunction, &error);
+        assert(error == nil && "Failed to create drawing compute pipeline state!");
+
+        computeFunction->release();
+    }
+
+    #pragma mark composition compute pipeline setup
+    {
+        MTL::Function* computeFunction = metalDefaultLibrary->newFunction(NS::String::string("compute_composition", NS::ASCIIStringEncoding));
+        assert(computeFunction && "Failed to load radiance composition compute function!");
+
+        compositionComputePipelineState = metalDevice->newComputePipelineState(computeFunction, &error);
+        assert(error == nil && "Failed to create radiance composition compute pipeline state!");
 
         computeFunction->release();
     }
@@ -294,13 +314,15 @@ void Engine::updateRenderPassDescriptor() {
     renderPassDescriptor->colorAttachments()->object(0)->setTexture(metalDrawable->texture());
 }
 
-void Engine::performComputePass(MTL::ComputeCommandEncoder* computeEncoder) {
+void Engine::performComputePass(MTL::CommandBuffer* computeCommandBuffer) {
+	MTL::ComputeCommandEncoder* computeEncoder = computeCommandBuffer->computeCommandEncoder();
+
     computeEncoder->pushDebugGroup(NS::String::string("Compute Pass", NS::ASCIIStringEncoding));
-    computeEncoder->setComputePipelineState(computePipelineState);
+    computeEncoder->setComputePipelineState(compositionComputePipelineState);
     
     // Set the output texture that will be used by the render pass
-    computeEncoder->setTexture(screenTexture, 0);
-	computeEncoder->setTexture(drawingTexture, 1);
+    computeEncoder->setTexture(screenTexture, TextureIndexScreen);
+	computeEncoder->setTexture(drawingTexture, TextureIndexDrawing);
     computeEncoder->setBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
     
     // Calculate dispatch size
@@ -313,13 +335,36 @@ void Engine::performComputePass(MTL::ComputeCommandEncoder* computeEncoder) {
     
     computeEncoder->dispatchThreadgroups(gridSize, threadGroupSize);
     computeEncoder->popDebugGroup();
+	computeEncoder->endEncoding();
 }
 
-void Engine::drawTexture(MTL::RenderCommandEncoder* renderCommandEncoder) {
+void Engine::drawTexture(MTL::CommandBuffer* computeCommandBuffer) {
+	MTL::ComputeCommandEncoder* computeEncoder = computeCommandBuffer->computeCommandEncoder();
+
+    computeEncoder->pushDebugGroup(NS::String::string("Drawing Compute Pass", NS::ASCIIStringEncoding));
+    computeEncoder->setComputePipelineState(drawingComputePipelineState);
+    
+    // Set the output texture that will be used by the render pass
+	computeEncoder->setTexture(drawingTexture, TextureIndexDrawing);
+    computeEncoder->setBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
+    
+    // Calculate dispatch size
+    MTL::Size threadGroupSize = MTL::Size(16, 16, 1);
+    MTL::Size gridSize = MTL::Size((screenTexture->width() + threadGroupSize.width - 1) / threadGroupSize.width,
+       							   (screenTexture->height() + threadGroupSize.height - 1) / threadGroupSize.height,
+        							1
+    );
+    
+    computeEncoder->dispatchThreadgroups(gridSize, threadGroupSize);
+    computeEncoder->popDebugGroup();
+	computeEncoder->endEncoding();
+}
+
+void Engine::presentTexture(MTL::RenderCommandEncoder* renderCommandEncoder) {
     renderCommandEncoder->pushDebugGroup(NS::String::string("Draw Frame", NS::ASCIIStringEncoding));
     renderCommandEncoder->setRenderPipelineState(pipelineState);
     
-    renderCommandEncoder->setFragmentTexture(screenTexture, 0);
+    renderCommandEncoder->setFragmentTexture(screenTexture, TextureIndexScreen);
 
     renderCommandEncoder->setFragmentSamplerState(samplerState, 0);
     renderCommandEncoder->setVertexBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
@@ -331,11 +376,8 @@ void Engine::drawTexture(MTL::RenderCommandEncoder* renderCommandEncoder) {
 void Engine::draw() {
     MTL::CommandBuffer* computeCommandBuffer = beginFrame(false);
     if (computeCommandBuffer) {
-        MTL::ComputeCommandEncoder* computeEncoder = computeCommandBuffer->computeCommandEncoder();
-        if (computeEncoder) {
-            performComputePass(computeEncoder);
-            computeEncoder->endEncoding();
-        }
+		drawTexture(computeCommandBuffer);
+		performComputePass(computeCommandBuffer);
         computeCommandBuffer->commit();
     }
     
@@ -344,7 +386,7 @@ void Engine::draw() {
     
     MTL::RenderCommandEncoder* renderEncoder = renderCommandBuffer->renderCommandEncoder(renderPassDescriptor);
     if (renderEncoder) {
-        drawTexture(renderEncoder);
+        presentTexture(renderEncoder);
         renderEncoder->endEncoding();
     }
     
