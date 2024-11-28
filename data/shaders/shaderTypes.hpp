@@ -13,7 +13,7 @@ struct FrameData {
 struct JFAParams {
     float2 oneOverSize;
     float uOffset;
-    bool skip;
+    int skip;
 };
 
 typedef enum BufferIndex {

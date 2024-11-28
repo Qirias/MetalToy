@@ -5,8 +5,8 @@ using namespace metal;
 #include "shaderTypes.hpp"
 #include "common.metal"
 
-half4 rayMarch(float2 uv, float2 resolution, texture2d<half, access::read_write> drawingTexture) {
-    half4 light = sampleTexture(drawingTexture, uv);
+half4 rayMarch(float2 uv, float2 resolution, texture2d<half> drawingTexture) {
+    half4 light = drawingTexture.sample(samplerNearest, uv);
     
     if (light.a > 0.1) {
         return light;
@@ -28,7 +28,7 @@ half4 rayMarch(float2 uv, float2 resolution, texture2d<half, access::read_write>
         for (int step = 0; step < maxSteps; step++) {
             if (outOfBounds(sampleUV)) break;
             
-            half4 sampleLight = sampleTexture(drawingTexture, sampleUV);
+            half4 sampleLight = drawingTexture.sample(samplerNearest, sampleUV);
             if (sampleLight.a > 0.5) {
                 radiance += sampleLight;
                 break;
@@ -41,30 +41,19 @@ half4 rayMarch(float2 uv, float2 resolution, texture2d<half, access::read_write>
     return radiance * oneOverRayCount;
 }
 
-kernel void compute_composition(    texture2d<half, access::read_write> outputTexture   [[texture(TextureIndexScreen)]],
-									texture2d<half, access::read_write> jfaTexture  	[[texture(TextureIndexJFA)]],
-                                    texture2d<half, access::read_write> drawingTexture  [[texture(TextureIndexDrawing)]],
-                        constant    FrameData&                          frameData       [[buffer(BufferIndexFrameData)]],
-                                    uint2                               gid             [[thread_position_in_grid]]) {
+fragment half4 fragment_composition(	VertexOut 			in 				[[stage_in]],
+										texture2d<half> 	jfaTexture  	[[texture(TextureIndexJFA)]],
+										texture2d<half> 	drawingTexture  [[texture(TextureIndexDrawing)]],
+							constant 	FrameData&          frameData       [[buffer(BufferIndexFrameData)]]) {
 
     uint width = drawingTexture.get_width();
     uint height = drawingTexture.get_height();
 
     float2 normalizedCurrMouse = frameData.mouseCoords.xy / float2(width, height);
     float2 normalizedPrevMouse = frameData.prevMouse / float2(width, height);
-    float2 uv = float2(gid) / float2(width, height);
+	float2 uv = in.texCoords;
 
-    if (frameData.frameCount < 1) {
-        outputTexture.write(half4(0.0, 0.0, 0.0, 0.0), gid);
-        return;
-    }
-
-    if (frameData.mouseCoords.z <= 0.0f) {
-        // Return the current color without modifying it (output the last drawn texture)
-        return;
-    }
-
-    half4 drawingColor = sampleTexture(drawingTexture, uv);
+	half4 drawingColor = drawingTexture.sample(samplerNearest, uv);
     
     half4 rayMarchedColor = rayMarch(uv, float2(width, height), drawingTexture);
     
@@ -77,6 +66,7 @@ kernel void compute_composition(    texture2d<half, access::read_write> outputTe
 	// // Clamp by the size of our texture (1.0 in uv space).
 	// float dist = clamp(distance(uv, nearestSeed), 0.0, 1.0);
 	// outputTexture.write(half4(dist, dist, dist, 1.0), gid);
+//	finalColor = drawingTexture.sample(samplerNearest, uv);
 
-    outputTexture.write(finalColor, gid);
+	return finalColor;
 }

@@ -6,19 +6,14 @@ using namespace metal;
 #include "common.metal"
 
 
-kernel void compute_jfa(    texture2d<half, access::read_write> inputTexture    [[texture(TextureIndexDrawing)]],
-                            texture2d<half, access::read_write> outputTexture   [[texture(TextureIndexJFA)]],
-                constant    JFAParams&                          params          [[buffer(BufferIndexJFAParams)]],
-                            uint2                               gid             [[thread_position_in_grid]]) {
-
-	uint width = inputTexture.get_width();
-	uint height = inputTexture.get_height();
-
-	float2 uv = float2(gid) / float2(width, height);
+fragment half4 fragment_jfa(	VertexOut 		in 			[[stage_in]],
+								texture2d<half> inputTex 	[[texture(TextureIndexDrawing)]],
+					constant 	JFAParams& 		params 		[[buffer(BufferIndexJFAParams)]]) {
+	
+	float2 uv = in.texCoords;
 
 	if (params.skip) {
-		outputTexture.write(half4(uv.x, uv.y, 0.0, 1.0), gid);
-		return;
+		return half4(uv.x, uv.y, 0.0, 1.0);
 	}
 
 	half4 nearestSeed = half4(-2.0);
@@ -33,7 +28,7 @@ kernel void compute_jfa(    texture2d<half, access::read_write> inputTexture    
 				continue;
 			}
 
-			half4 sampleValue = sampleTexture(inputTexture, sampleUV);
+			half4 sampleValue = inputTex.sample(samplerNearest, sampleUV);
 			float2 sampleSeed = float2(sampleValue.xy);
 
 			// If sample has a seed
@@ -49,5 +44,5 @@ kernel void compute_jfa(    texture2d<half, access::read_write> inputTexture    
 		}
 	}
 
-	outputTexture.write(half4(nearestSeed), gid);
+	return half4(nearestSeed);
 }

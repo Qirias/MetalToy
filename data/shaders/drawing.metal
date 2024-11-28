@@ -43,32 +43,32 @@ static half4 draw(float2 uv
     return col;
 }
 
-kernel void compute_drawing(    texture2d<half, access::read_write> drawingTexture  [[texture(TextureIndexDrawing)]],
-                    constant    FrameData&                          frameData       [[buffer(BufferIndexFrameData)]],
-                                uint2                               gid             [[thread_position_in_grid]]) {
+fragment half4 fragment_drawing(	VertexOut 			in 				[[stage_in]],
+									texture2d<half> 	drawingTexture  [[texture(TextureIndexDrawing)]],
+						constant 	FrameData&          frameData       [[buffer(BufferIndexFrameData)]]) {
 
     uint width = drawingTexture.get_width();
     uint height = drawingTexture.get_height();
 
     float2 normalizedCurrMouse = frameData.mouseCoords.xy / float2(width, height);
     float2 normalizedPrevMouse = frameData.prevMouse / float2(width, height);
-    float2 uv = float2(gid) / float2(width, height);
+	float2 uv = in.texCoords;
+	float2 fragCoord = in.position.xy;
 
     if (frameData.frameCount < 1) {
-        drawingTexture.write(half4(0.0, 0.0, 0.0, 0.0), gid);
-        return;
+        return half4(0.0, 0.0, 0.0, 0.0);
     }
 
     if (frameData.mouseCoords.z <= 0.0f) {
         // Return the current color without modifying it (output the last drawn texture)
-        return;
+        return drawingTexture.sample(samplerNearest, uv);
     }
-    
-    half4 currentColor = drawingTexture.read(gid);
+
+    half4 currentColor = drawingTexture.sample(samplerNearest, uv);
 
     half4 newColor = draw(uv, normalizedCurrMouse, normalizedPrevMouse, 
                           frameData.mouseCoords.z, frameData.mouseCoords.w, 
                           currentColor, frameData.keyboardDigits);
 
-    drawingTexture.write(newColor, gid);
+	return newColor;
 }

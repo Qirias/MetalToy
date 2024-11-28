@@ -2,6 +2,13 @@
 #include <metal_stdlib>
 using namespace metal;
 
+constexpr sampler samplerNearest(filter::nearest, address::clamp_to_edge);
+
+struct VertexOut {
+	float4 position [[position]];
+	float2 texCoords;
+};
+
 constant half4 colors[6] = {
     half4(1.0, 0.0, 0.0, 1.0), // Red for digit '1'
     half4(0.0, 1.0, 0.0, 1.0), // Green for digit '2'
