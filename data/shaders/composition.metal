@@ -66,7 +66,8 @@ fragment half4 fragment_composition(	VertexOut 			in 				[[stage_in]],
 	// // Clamp by the size of our texture (1.0 in uv space).
 	// float dist = clamp(distance(uv, nearestSeed), 0.0, 1.0);
 	// outputTexture.write(half4(dist, dist, dist, 1.0), gid);
-//	finalColor = drawingTexture.sample(samplerNearest, uv);
+	finalColor = jfaTexture.sample(samplerNearest, uv);
 
-	return finalColor;
+//	return finalColor;
+	return half4(uv.x * finalColor.a, uv.y * finalColor.a, 0.0, 1.0);
 }

@@ -90,7 +90,7 @@ void Engine::resizeFrameBuffer(int width, int height) {
 void Engine::initWindow() {
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindow = glfwCreateWindow(800, 600, "MetalToy", NULL, NULL);
+    glfwWindow = glfwCreateWindow(800, 800, "MetalToy", NULL, NULL);
     if (!glfwWindow) {
         glfwTerminate();
         exit(EXIT_FAILURE);
@@ -219,7 +219,6 @@ void Engine::createRenderPipelines() {
 		drawingPipelineDescriptor->setLabel(NS::String::string("Drawing Render Pipeline", NS::ASCIIStringEncoding));
 		drawingPipelineDescriptor->setVertexFunction(vertexFunction);
 		drawingPipelineDescriptor->setFragmentFunction(drawingFragmentFunction);
-		drawingPipelineDescriptor->setSampleCount(1);
 		drawingPipelineDescriptor->colorAttachments()->object(0)->setPixelFormat(MTL::PixelFormatRGBA8Unorm);
 		
 		drawingRenderPipelineState = metalDevice->newRenderPipelineState(drawingPipelineDescriptor, &error);
@@ -238,7 +237,6 @@ void Engine::createRenderPipelines() {
 		jfaPipelineDescriptor->setLabel(NS::String::string("JFA Render Pipeline", NS::ASCIIStringEncoding));
 		jfaPipelineDescriptor->setVertexFunction(vertexFunction);
 		jfaPipelineDescriptor->setFragmentFunction(jfaFragmentFunction);
-		jfaPipelineDescriptor->setSampleCount(1);
 		jfaPipelineDescriptor->colorAttachments()->object(0)->setPixelFormat(MTL::PixelFormatRGBA8Unorm);
 		
 		jfaRenderPipelineState = metalDevice->newRenderPipelineState(jfaPipelineDescriptor, &error);
@@ -257,7 +255,6 @@ void Engine::createRenderPipelines() {
 		compositionPipelineDescriptor->setLabel(NS::String::string("Composition Render Pipeline", NS::ASCIIStringEncoding));
 		compositionPipelineDescriptor->setVertexFunction(vertexFunction);
 		compositionPipelineDescriptor->setFragmentFunction(compositionFragmentFunction);
-		compositionPipelineDescriptor->setSampleCount(1);
 		compositionPipelineDescriptor->colorAttachments()->object(0)->setPixelFormat(MTL::PixelFormatRGBA8Unorm);
 		
 		compositionRenderPipelineState = metalDevice->newRenderPipelineState(compositionPipelineDescriptor, &error);
@@ -274,8 +271,8 @@ void Engine::createRenderPassDescriptor() {
     renderPassDescriptor = MTL::RenderPassDescriptor::alloc()->init();
 
     MTL::SamplerDescriptor* samplerDescriptor = MTL::SamplerDescriptor::alloc()->init();
-	samplerDescriptor->setMinFilter(MTL::SamplerMinMagFilterNearest);
-    samplerDescriptor->setMagFilter(MTL::SamplerMinMagFilterNearest);
+	samplerDescriptor->setMinFilter(MTL::SamplerMinMagFilterLinear);
+    samplerDescriptor->setMagFilter(MTL::SamplerMinMagFilterLinear);
 	samplerDescriptor->setMipFilter(MTL::SamplerMipFilterNotMipmapped);
     samplerDescriptor->setSAddressMode(MTL::SamplerAddressModeClampToEdge);
     samplerDescriptor->setTAddressMode(MTL::SamplerAddressModeClampToEdge);
@@ -287,7 +284,6 @@ void Engine::createRenderPassDescriptor() {
 	textureDesc->setHeight(metalLayer.drawableSize.height);
 	textureDesc->setUsage(MTL::TextureUsageShaderWrite | MTL::TextureUsageShaderRead | MTL::TextureUsageRenderTarget);
     textureDesc->setStorageMode(MTL::StorageModePrivate);
-	textureDesc->setMipmapLevelCount(1);
 	textureDesc->setTextureType(MTL::TextureType2D);
 	
 	jfaTexture = metalDevice->newTexture(textureDesc);
@@ -325,38 +321,57 @@ void Engine::drawTexture(MTL::CommandBuffer* commandBuffer) {
 	
 	drawingEncoder->popDebugGroup();
 	drawingEncoder->endEncoding();
+	
+	drawingRenderPass->release();
 }
 
 void Engine::performJFA(MTL::CommandBuffer* commandBuffer) {
 	MTL::TextureDescriptor* desc = MTL::TextureDescriptor::texture2DDescriptor(
-		jfaTexture->pixelFormat(),
-		jfaTexture->width(),
-		jfaTexture->height(),
-		false
-	);
+		metalDrawable->layer()->pixelFormat(),
+		metalDrawable->layer()->drawableSize().width,
+		metalDrawable->layer()->drawableSize().height,
+		false);
+	
 	desc->setUsage(MTL::TextureUsageShaderRead | MTL::TextureUsageShaderWrite | MTL::TextureUsageRenderTarget);
+	
 	MTL::Texture* renderA = metalDevice->newTexture(desc);
 	MTL::Texture* renderB = metalDevice->newTexture(desc);
-
+	
 	MTL::Texture* currentInput = drawingTexture;
 	MTL::Texture* currentOutput = renderA;
 
-	int passes = ceil(log2(max(float(jfaTexture->width()), float(jfaTexture->height()))));
+	int passes = ceil(log2(max(float(jfaTexture->width()), float(jfaTexture->height())))); // 10
 
-	JFAParams* params = static_cast<JFAParams*>(jfaOffsetBuffer[currentFrameIndex]->contents());
-	params->oneOverSize = simd::float2{1.0f / jfaTexture->width(), 1.0f / jfaTexture->height()};
+	JFAParams* params = (JFAParams*)(jfaOffsetBuffer[currentFrameIndex]->contents());
+	constexpr int STAGES = 6;
+	std::array<MTL::Fence*, STAGES> fences{};
+	for (int i = 0; i < STAGES; i++) {
+		fences[i] = metalDevice->newFence();
+	}
+	
+	MTL::RenderPassDescriptor* jfaRenderPass = MTL::RenderPassDescriptor::alloc()->init();
 
-	for (int i = 0; i < passes || (passes == 0 && i == 0); ++i) {
-		MTL::RenderPassDescriptor* jfaRenderPass = MTL::RenderPassDescriptor::alloc()->init();
+
+	for (int i = 0; i < STAGES || (passes == 0 && i == 0); ++i) {
 		jfaRenderPass->colorAttachments()->object(0)->setTexture(currentOutput);
-
+		jfaRenderPass->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionLoad);
+		jfaRenderPass->colorAttachments()->object(0)->setStoreAction(MTL::StoreActionStore);
+		
 		MTL::RenderCommandEncoder* jfaEncoder = commandBuffer->renderCommandEncoder(jfaRenderPass);
+		
+		if (i > 0) {
+			jfaEncoder->waitForFence(fences[i-1], MTL::RenderStageFragment);
+		}
+		
+		jfaEncoder->updateFence(fences[i], MTL::RenderStageFragment);
+		
 		jfaEncoder->pushDebugGroup(NS::String::string("Jump Flood Algorithm Render Pass", NS::ASCIIStringEncoding));
 		
 		jfaEncoder->setRenderPipelineState(jfaRenderPipelineState);
 		
-		params->uOffset = pow(2.0, passes - i - 1);
+		params->uOffset = pow(2.0, passes - i - 1); // 512 256 .. 1
 		params->skip = (passes == 0) ? 1 : 0;
+		params->oneOverSize = simd::float2{1.0f / jfaTexture->width(), 1.0f / jfaTexture->height()};
 
 		jfaEncoder->setVertexBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
 		jfaEncoder->setFragmentBuffer(jfaOffsetBuffer[currentFrameIndex], 0, BufferIndexJFAParams);
@@ -366,10 +381,12 @@ void Engine::performJFA(MTL::CommandBuffer* commandBuffer) {
 		
 		jfaEncoder->popDebugGroup();
 		jfaEncoder->endEncoding();
-
+	
 		currentInput = currentOutput;
 		currentOutput = (currentOutput == renderA) ? renderB : renderA;
 	}
+		
+	
 
 	// Copy the final result to jfaTexture
 	MTL::BlitCommandEncoder* blitEncoder = commandBuffer->blitCommandEncoder();
@@ -392,6 +409,12 @@ void Engine::performJFA(MTL::CommandBuffer* commandBuffer) {
 
 	renderA->release();
 	renderB->release();
+	
+	for (int i = 0; i < STAGES; i++) {
+		fences[i]->release();
+	}
+
+	jfaRenderPass->release();
 }
 
 void Engine::performComposition(MTL::CommandBuffer* commandBuffer) {
