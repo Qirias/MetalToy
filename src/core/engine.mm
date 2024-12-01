@@ -4,7 +4,8 @@ Engine::Engine()
 : camera(simd::float3{0.0f, 0.0f, 3.0f}, 0.1, 1000)
 , lastFrame(0.0f)
 , frameNumber(0)
-, currentFrameIndex(0) {
+, currentFrameIndex(0)
+, jfaPasses(0) {
 	inFlightSemaphore = dispatch_semaphore_create(MaxFramesInFlight);
 
     for (int i = 0; i < MaxFramesInFlight; i++) {
@@ -33,6 +34,7 @@ void Engine::run() {
         
         @autoreleasepool {
             metalDrawable = (__bridge CA::MetalDrawable*)[metalLayer nextDrawable];
+			jfaPasses = ceil(log2(max(float(metalDrawable->layer()->drawableSize().width), float(metalDrawable->layer()->drawableSize().height))));
             draw();
         }
         
@@ -43,10 +45,15 @@ void Engine::run() {
 void Engine::cleanup() {
     glfwTerminate();
 	
-	for(uint8_t i = 0; i < MaxFramesInFlight; i++) {
-		frameDataBuffers[i]->release();
-		jfaOffsetBuffer[i]->release();
+	for(uint8_t frame = 0; frame < MaxFramesInFlight; frame++) {
+		frameDataBuffers[frame]->release();
     }
+	
+	for(uint8_t frame = 0; frame < MaxFramesInFlight; frame++) {
+		for(uint8_t stage = 0; stage < MAXSTAGES; stage++) {
+			jfaOffsetBuffer[frame][stage]->release();
+		}
+	}
 	
 	drawingTexture->release();
 	jfaTexture->release();
@@ -143,13 +150,21 @@ void Engine::endFrame(MTL::CommandBuffer* commandBuffer, MTL::Drawable* currentD
 }
 
 void Engine::createBuffers() {
-	for(uint8_t i = 0; i < MaxFramesInFlight; i++) {
-		frameDataBuffers[i] = metalDevice->newBuffer(sizeof(FrameData), MTL::ResourceStorageModeShared);
-		frameDataBuffers[i]->setLabel(NS::String::string("FrameData", NS::ASCIIStringEncoding));
-		
-		jfaOffsetBuffer[i] = metalDevice->newBuffer(sizeof(JFAParams), MTL::ResourceStorageModeShared);
-		jfaOffsetBuffer[i]->setLabel(NS::String::string("jfaOffset", NS::ASCIIStringEncoding));
-
+	for(uint8_t frame = 0; frame < MaxFramesInFlight; frame++) {
+		frameDataBuffers[frame] = metalDevice->newBuffer(sizeof(FrameData), MTL::ResourceStorageModeShared);
+		frameDataBuffers[frame]->setLabel(NS::String::string("FrameData", NS::ASCIIStringEncoding));
+	}
+	
+	jfaOffsetBuffer.resize(MaxFramesInFlight);
+	for(uint8_t frame = 0; frame < MaxFramesInFlight; frame++) {
+		jfaOffsetBuffer[frame].resize(MAXSTAGES);
+		for (int stage = 0; stage < MAXSTAGES; stage++) {
+			std::string labelStr = "Frame: " + std::to_string(frame) + "|Stage: " + std::to_string(stage);
+			NS::String* label = NS::String::string(labelStr.c_str(), NS::ASCIIStringEncoding);
+			
+			jfaOffsetBuffer[frame][stage] = metalDevice->newBuffer(sizeof(JFAParams), MTL::ResourceStorageModeManaged);
+			jfaOffsetBuffer[frame][stage]->setLabel(label);
+		}
 	}
 }
 
@@ -339,42 +354,27 @@ void Engine::performJFA(MTL::CommandBuffer* commandBuffer) {
 	
 	MTL::Texture* currentInput = drawingTexture;
 	MTL::Texture* currentOutput = renderA;
-
-	int passes = ceil(log2(max(float(jfaTexture->width()), float(jfaTexture->height())))); // 10
-
-	JFAParams* params = (JFAParams*)(jfaOffsetBuffer[currentFrameIndex]->contents());
-	constexpr int STAGES = 6;
-	std::array<MTL::Fence*, STAGES> fences{};
-	for (int i = 0; i < STAGES; i++) {
-		fences[i] = metalDevice->newFence();
-	}
 	
 	MTL::RenderPassDescriptor* jfaRenderPass = MTL::RenderPassDescriptor::alloc()->init();
 
-
-	for (int i = 0; i < STAGES || (passes == 0 && i == 0); ++i) {
+	for (int stage = 0; stage < jfaPasses || (jfaPasses == 0 && stage == 0); ++stage) {
 		jfaRenderPass->colorAttachments()->object(0)->setTexture(currentOutput);
-		jfaRenderPass->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionLoad);
-		jfaRenderPass->colorAttachments()->object(0)->setStoreAction(MTL::StoreActionStore);
-		
+		JFAParams* params = (JFAParams*)(jfaOffsetBuffer[currentFrameIndex][stage]->contents());
+
 		MTL::RenderCommandEncoder* jfaEncoder = commandBuffer->renderCommandEncoder(jfaRenderPass);
-		
-		if (i > 0) {
-			jfaEncoder->waitForFence(fences[i-1], MTL::RenderStageFragment);
-		}
-		
-		jfaEncoder->updateFence(fences[i], MTL::RenderStageFragment);
+		std::string labelStr = "Stage: " + std::to_string(stage);
+		NS::String* label = NS::String::string(labelStr.c_str(), NS::ASCIIStringEncoding);
+		jfaEncoder->setLabel(label);
 		
 		jfaEncoder->pushDebugGroup(NS::String::string("Jump Flood Algorithm Render Pass", NS::ASCIIStringEncoding));
-		
 		jfaEncoder->setRenderPipelineState(jfaRenderPipelineState);
 		
-		params->uOffset = pow(2.0, passes - i - 1); // 512 256 .. 1
-		params->skip = (passes == 0) ? 1 : 0;
+		params->uOffset = pow(2.0, jfaPasses - stage - 1);
+		params->skip = (jfaPasses == 0) ? 1 : 0;
 		params->oneOverSize = simd::float2{1.0f / jfaTexture->width(), 1.0f / jfaTexture->height()};
 
 		jfaEncoder->setVertexBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
-		jfaEncoder->setFragmentBuffer(jfaOffsetBuffer[currentFrameIndex], 0, BufferIndexJFAParams);
+		jfaEncoder->setFragmentBuffer(jfaOffsetBuffer[currentFrameIndex][stage], 0, BufferIndexJFAParams);
 		jfaEncoder->setFragmentTexture(currentInput, TextureIndexDrawing);
 		
 		jfaEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0, 3, 1);
@@ -385,7 +385,6 @@ void Engine::performJFA(MTL::CommandBuffer* commandBuffer) {
 		currentInput = currentOutput;
 		currentOutput = (currentOutput == renderA) ? renderB : renderA;
 	}
-		
 	
 
 	// Copy the final result to jfaTexture
@@ -393,27 +392,11 @@ void Engine::performJFA(MTL::CommandBuffer* commandBuffer) {
 	MTL::Origin origin = MTL::Origin(0, 0, 0);
 	MTL::Size size = MTL::Size(jfaTexture->width(), jfaTexture->height(), 1);
 	
-	blitEncoder->copyFromTexture(
-		currentInput,   // Source is the last currentInput (either renderA or renderB)
-		0,              // source level
-		0,              // source slice
-		origin,         // source origin
-		size,           // source size
-		jfaTexture,     // Destination is always jfaTexture
-		0,              // destination level
-		0,              // destination slice
-		origin          // destination origin
-	);
-	
+	blitEncoder->copyFromTexture(currentInput, 0, 0, origin, size, jfaTexture, 0, 0, origin);
 	blitEncoder->endEncoding();
 
 	renderA->release();
 	renderB->release();
-	
-	for (int i = 0; i < STAGES; i++) {
-		fences[i]->release();
-	}
-
 	jfaRenderPass->release();
 }
 

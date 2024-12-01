@@ -57,17 +57,12 @@ fragment half4 fragment_composition(	VertexOut 			in 				[[stage_in]],
     
     half4 rayMarchedColor = rayMarch(uv, float2(width, height), drawingTexture);
     
-//    rayMarchedColor = tonemap(rayMarchedColor);
     rayMarchedColor = gammaCorrect(rayMarchedColor);
     
     half4 finalColor = mix(drawingColor, rayMarchedColor, rayMarchedColor.a);
 
-	// float2 nearestSeed = float2(sampleTexture(jfaTexture, uv).xy);
-	// // Clamp by the size of our texture (1.0 in uv space).
-	// float dist = clamp(distance(uv, nearestSeed), 0.0, 1.0);
-	// outputTexture.write(half4(dist, dist, dist, 1.0), gid);
-	finalColor = jfaTexture.sample(samplerNearest, uv);
+//	finalColor = jfaTexture.sample(samplerNearest, uv);
 
-//	return finalColor;
-	return half4(uv.x * finalColor.a, uv.y * finalColor.a, 0.0, 1.0);
+	return finalColor;
+//	return half4(uv.x * finalColor.a, uv.y * finalColor.a, 0.0, 1.0);
 }

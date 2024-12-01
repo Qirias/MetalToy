@@ -34,18 +34,6 @@ static half4 gammaCorrect(half4 color) {
     return half4(pow(color.xyz, half3(1.0 / 2.2)), color.w);
 }
 
-// static half4 sampleTexture(texture2d<half, access::read_write> tex, float2 uv) {
-//     float2 texSize = float2(tex.get_width(), tex.get_height());
-//     uint2 pixelCoord = uint2(uv * texSize);
-    
-//     if (pixelCoord.x >= tex.get_width() || pixelCoord.y >= tex.get_height() 
-//         || pixelCoord.x < 0 || pixelCoord.y < 0) {
-//         return half4(0.0);
-//     }
-    
-//     return tex.read(pixelCoord);
-// }
-
 static half4 sampleTexture(texture2d<half, access::read_write> tex, float2 uv) {
     float2 texSize = float2(tex.get_width(), tex.get_height());
     uint2 pixelCoord = uint2(uv * texSize);

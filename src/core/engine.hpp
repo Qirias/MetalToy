@@ -13,7 +13,6 @@
 #include <QuartzCore/CAMetalLayer.h>
 #include <QuartzCore/QuartzCore.hpp>
 
-// #include "AAPLMathUtilities.h"
 
 #include "vertexData.hpp"
 #include "components/camera.hpp"
@@ -25,6 +24,8 @@
 #include <filesystem>
 
 constexpr uint8_t MaxFramesInFlight = 3;
+constexpr uint8_t MAXSTAGES = 12;
+
 
 class Engine {
 public:
@@ -71,8 +72,8 @@ private:
     uint8_t                                             currentFrameIndex;
 	
 	// Buffers used to store dynamically changing per-frame data
-	MTL::Buffer* 		frameDataBuffers[MaxFramesInFlight];
-    MTL::Buffer*        jfaOffsetBuffer[MaxFramesInFlight];
+	MTL::Buffer* 							frameDataBuffers[MaxFramesInFlight];
+	std::vector<std::vector<MTL::Buffer*>> 	jfaOffsetBuffer;
 
     MTL::Device*        metalDevice;
     GLFWwindow*         glfwWindow;
@@ -109,4 +110,6 @@ private:
 
     uint64_t                    frameNumber;
     uint8_t                     frameDataBufferIndex;
+	
+	uint8_t						jfaPasses;
 };
