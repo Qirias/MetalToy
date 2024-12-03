@@ -56,7 +56,7 @@ fragment half4 fragment_drawing(	VertexOut 			in 				[[stage_in]],
 	float2 fragCoord = in.position.xy;
 
     if (frameData.frameCount < 1) {
-        return half4(0.0, 0.0, 0.0, 0.0);
+        return half4(0.0, 0.0, 0.0, 1.0);
     }
 
     if (frameData.mouseCoords.z <= 0.0f) {
@@ -64,11 +64,13 @@ fragment half4 fragment_drawing(	VertexOut 			in 				[[stage_in]],
         return drawingTexture.sample(samplerNearest, uv);
     }
 
-    half4 currentColor = drawingTexture.sample(samplerNearest, uv);
+//    half4 currentColor = drawingTexture.sample(samplerNearest, uv);
+    half4 currentColor = drawingTexture.read(uint2(uv*float2(width, height)));
 
     half4 newColor = draw(uv, normalizedCurrMouse, normalizedPrevMouse, 
                           frameData.mouseCoords.z, frameData.mouseCoords.w, 
                           currentColor, frameData.keyboardDigits);
+	
 
 	return newColor;
 }

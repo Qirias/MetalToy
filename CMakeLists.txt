@@ -8,10 +8,10 @@ set(CMAKE_CXX_STANDARD 20)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # Glob all source files in src and libs
-file(GLOB_RECURSE SOURCES 
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp" 
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp" 
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.mm" 
+file(GLOB_RECURSE SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.mm"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/external/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/external/*.cc"
@@ -62,6 +62,8 @@ endforeach()
 set(SHADER_METALLIB "${CMAKE_CURRENT_BINARY_DIR}/default.metallib")
 add_definitions(-DSHADER_METALLIB="${SHADER_METALLIB}")
 
+# xattr -c default.metallib if metallib is flagged as quarantined
+
 # Create metallib from all AIR files
 add_custom_command(
     OUTPUT ${SHADER_METALLIB}
@@ -94,7 +96,7 @@ set_source_files_properties(src/main.mm PROPERTIES LANGUAGE CXX)
 target_link_libraries(${PROJECT_NAME} PRIVATE METAL_CPP)
 
 # Include directories for Metal-CPP headers and your project headers
-target_include_directories(${PROJECT_NAME} PRIVATE 
+target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/metal-cmake/metal-cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core
     ${CMAKE_CURRENT_SOURCE_DIR}/src/math

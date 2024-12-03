@@ -5,6 +5,7 @@ Engine::Engine()
 , lastFrame(0.0f)
 , frameNumber(0)
 , currentFrameIndex(0)
+, pixelFormat(MTL::PixelFormatRGBA8Unorm)
 , jfaPasses(0) {
 	inFlightSemaphore = dispatch_semaphore_create(MaxFramesInFlight);
 
@@ -56,10 +57,14 @@ void Engine::cleanup() {
 	}
 	
 	drawingTexture->release();
+	seedTexture->release();
 	jfaTexture->release();
+	distanceTexture->release();
 	renderPassDescriptor->release();
 	drawingRenderPipelineState->release();
+	seedRenderPipelineState->release();
 	jfaRenderPipelineState->release();
+	distanceRenderPipelineState->release();
 	compositionRenderPipelineState->release();
     metalDevice->release();
 }
@@ -97,7 +102,7 @@ void Engine::resizeFrameBuffer(int width, int height) {
 void Engine::initWindow() {
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindow = glfwCreateWindow(800, 800, "MetalToy", NULL, NULL);
+    glfwWindow = glfwCreateWindow(1024, 1024, "MetalToy", NULL, NULL);
     if (!glfwWindow) {
         glfwTerminate();
         exit(EXIT_FAILURE);
@@ -171,8 +176,7 @@ void Engine::createBuffers() {
 void Engine::createDefaultLibrary() {
     NS::String* libraryPath = NS::String::string(
         SHADER_METALLIB,
-        NS::UTF8StringEncoding
-    );
+        NS::UTF8StringEncoding);
     
     NS::Error* error = nullptr;
 
@@ -227,61 +231,99 @@ void Engine::createRenderPipelines() {
 
 	#pragma mark Drawing Render Pipeline
 	{
-		MTL::Function* drawingFragmentFunction = metalDefaultLibrary->newFunction(NS::String::string("fragment_drawing", NS::ASCIIStringEncoding));
-		assert(drawingFragmentFunction && "Failed to load drawing fragment function!");
+		MTL::Function* fragmentFunction = metalDefaultLibrary->newFunction(NS::String::string("fragment_drawing", NS::ASCIIStringEncoding));
+		assert(fragmentFunction && "Failed to load drawing fragment function!");
 
-		MTL::RenderPipelineDescriptor* drawingPipelineDescriptor = MTL::RenderPipelineDescriptor::alloc()->init();
-		drawingPipelineDescriptor->setLabel(NS::String::string("Drawing Render Pipeline", NS::ASCIIStringEncoding));
-		drawingPipelineDescriptor->setVertexFunction(vertexFunction);
-		drawingPipelineDescriptor->setFragmentFunction(drawingFragmentFunction);
-		drawingPipelineDescriptor->colorAttachments()->object(0)->setPixelFormat(MTL::PixelFormatRGBA8Unorm);
+		MTL::RenderPipelineDescriptor* renderPipelineDescriptor = MTL::RenderPipelineDescriptor::alloc()->init();
+		renderPipelineDescriptor->setLabel(NS::String::string("Drawing Render Pipeline", NS::ASCIIStringEncoding));
+		renderPipelineDescriptor->setVertexFunction(vertexFunction);
+		renderPipelineDescriptor->setFragmentFunction(fragmentFunction);
+		renderPipelineDescriptor->colorAttachments()->object(0)->setPixelFormat(pixelFormat);
 		
-		drawingRenderPipelineState = metalDevice->newRenderPipelineState(drawingPipelineDescriptor, &error);
+		drawingRenderPipelineState = metalDevice->newRenderPipelineState(renderPipelineDescriptor, &error);
 		assert(error == nil && "Failed to create drawing render pipeline state!");
 
-		drawingFragmentFunction->release();
-		drawingPipelineDescriptor->release();
+		fragmentFunction->release();
+		renderPipelineDescriptor->release();
 	}
+	
+	#pragma mark Seed Render Pipeline
+	{
+		MTL::Function* fragmentFunction = metalDefaultLibrary->newFunction(NS::String::string("fragment_seed", NS::ASCIIStringEncoding));
+		assert(fragmentFunction && "Failed to load seed fragment function!");
+
+		MTL::RenderPipelineDescriptor* renderPipelineDescriptor = MTL::RenderPipelineDescriptor::alloc()->init();
+		renderPipelineDescriptor->setLabel(NS::String::string("Seed Render Pipeline", NS::ASCIIStringEncoding));
+		renderPipelineDescriptor->setVertexFunction(vertexFunction);
+		renderPipelineDescriptor->setFragmentFunction(fragmentFunction);
+		renderPipelineDescriptor->colorAttachments()->object(0)->setPixelFormat(pixelFormat);
+		
+		seedRenderPipelineState = metalDevice->newRenderPipelineState(renderPipelineDescriptor, &error);
+		assert(error == nil && "Failed to create seed render pipeline state!");
+
+		fragmentFunction->release();
+		renderPipelineDescriptor->release();
+	}
+
 
 	#pragma mark JFA Render Pipeline
 	{
-		MTL::Function* jfaFragmentFunction = metalDefaultLibrary->newFunction(NS::String::string("fragment_jfa", NS::ASCIIStringEncoding));
-		assert(jfaFragmentFunction && "Failed to load JFA fragment function!");
+		MTL::Function* fragmentFunction = metalDefaultLibrary->newFunction(NS::String::string("fragment_jfa", NS::ASCIIStringEncoding));
+		assert(fragmentFunction && "Failed to load JFA fragment function!");
 
-		MTL::RenderPipelineDescriptor* jfaPipelineDescriptor = MTL::RenderPipelineDescriptor::alloc()->init();
-		jfaPipelineDescriptor->setLabel(NS::String::string("JFA Render Pipeline", NS::ASCIIStringEncoding));
-		jfaPipelineDescriptor->setVertexFunction(vertexFunction);
-		jfaPipelineDescriptor->setFragmentFunction(jfaFragmentFunction);
-		jfaPipelineDescriptor->colorAttachments()->object(0)->setPixelFormat(MTL::PixelFormatRGBA8Unorm);
+		MTL::RenderPipelineDescriptor* renderPipelineDescriptor = MTL::RenderPipelineDescriptor::alloc()->init();
+		renderPipelineDescriptor->setLabel(NS::String::string("JFA Render Pipeline", NS::ASCIIStringEncoding));
+		renderPipelineDescriptor->setVertexFunction(vertexFunction);
+		renderPipelineDescriptor->setFragmentFunction(fragmentFunction);
+		renderPipelineDescriptor->colorAttachments()->object(0)->setPixelFormat(pixelFormat);
 		
-		jfaRenderPipelineState = metalDevice->newRenderPipelineState(jfaPipelineDescriptor, &error);
+		jfaRenderPipelineState = metalDevice->newRenderPipelineState(renderPipelineDescriptor, &error);
 		assert(error == nil && "Failed to create JFA render pipeline state!");
 
-		jfaFragmentFunction->release();
-		jfaPipelineDescriptor->release();
+		fragmentFunction->release();
+		renderPipelineDescriptor->release();
+	}
+	
+	#pragma mark Distance Render Pipeline
+	{
+		MTL::Function* fragmentFunction = metalDefaultLibrary->newFunction(NS::String::string("fragment_distance", NS::ASCIIStringEncoding));
+		assert(fragmentFunction && "Failed to load Distance fragment function!");
+
+		MTL::RenderPipelineDescriptor* renderPipelineDescriptor = MTL::RenderPipelineDescriptor::alloc()->init();
+		renderPipelineDescriptor->setLabel(NS::String::string("Distance Render Pipeline", NS::ASCIIStringEncoding));
+		renderPipelineDescriptor->setVertexFunction(vertexFunction);
+		renderPipelineDescriptor->setFragmentFunction(fragmentFunction);
+		renderPipelineDescriptor->colorAttachments()->object(0)->setPixelFormat(pixelFormat);
+		
+		distanceRenderPipelineState = metalDevice->newRenderPipelineState(renderPipelineDescriptor, &error);
+		assert(error == nil && "Failed to create Distance render pipeline state!");
+
+		fragmentFunction->release();
+		renderPipelineDescriptor->release();
 	}
 
 	#pragma mark Composition Render Pipeline
 	{
-		MTL::Function* compositionFragmentFunction = metalDefaultLibrary->newFunction(NS::String::string("fragment_composition", NS::ASCIIStringEncoding));
-		assert(compositionFragmentFunction && "Failed to load composition fragment function!");
+		MTL::Function* fragmentFunction = metalDefaultLibrary->newFunction(NS::String::string("fragment_composition", NS::ASCIIStringEncoding));
+		assert(fragmentFunction && "Failed to load composition fragment function!");
 
-		MTL::RenderPipelineDescriptor* compositionPipelineDescriptor = MTL::RenderPipelineDescriptor::alloc()->init();
-		compositionPipelineDescriptor->setLabel(NS::String::string("Composition Render Pipeline", NS::ASCIIStringEncoding));
-		compositionPipelineDescriptor->setVertexFunction(vertexFunction);
-		compositionPipelineDescriptor->setFragmentFunction(compositionFragmentFunction);
-		compositionPipelineDescriptor->colorAttachments()->object(0)->setPixelFormat(MTL::PixelFormatRGBA8Unorm);
+		MTL::RenderPipelineDescriptor* renderPipelineDescriptor = MTL::RenderPipelineDescriptor::alloc()->init();
+		renderPipelineDescriptor->setLabel(NS::String::string("Composition Render Pipeline", NS::ASCIIStringEncoding));
+		renderPipelineDescriptor->setVertexFunction(vertexFunction);
+		renderPipelineDescriptor->setFragmentFunction(fragmentFunction);
+		renderPipelineDescriptor->colorAttachments()->object(0)->setPixelFormat(pixelFormat);
 		
-		compositionRenderPipelineState = metalDevice->newRenderPipelineState(compositionPipelineDescriptor, &error);
+		compositionRenderPipelineState = metalDevice->newRenderPipelineState(renderPipelineDescriptor, &error);
 		assert(error == nil && "Failed to create composition render pipeline state!");
 
-		compositionFragmentFunction->release();
-		compositionPipelineDescriptor->release();
+		fragmentFunction->release();
+		renderPipelineDescriptor->release();
 	}
 
 	vertexFunction->release();
 }
 
+#pragma mark createRenderPassDescriptor
 void Engine::createRenderPassDescriptor() {
     renderPassDescriptor = MTL::RenderPassDescriptor::alloc()->init();
 
@@ -294,7 +336,7 @@ void Engine::createRenderPassDescriptor() {
     samplerState = metalDevice->newSamplerState(samplerDescriptor);
 
 	MTL::TextureDescriptor* textureDesc = MTL::TextureDescriptor::alloc()->init();
-	textureDesc->setPixelFormat(MTL::PixelFormatRGBA8Unorm);
+	textureDesc->setPixelFormat(pixelFormat);
 	textureDesc->setWidth(metalLayer.drawableSize.width);
 	textureDesc->setHeight(metalLayer.drawableSize.height);
 	textureDesc->setUsage(MTL::TextureUsageShaderWrite | MTL::TextureUsageShaderRead | MTL::TextureUsageRenderTarget);
@@ -305,6 +347,10 @@ void Engine::createRenderPassDescriptor() {
 	jfaTexture->setLabel(NS::String::string("jfaTexture", NS::ASCIIStringEncoding));
 	drawingTexture = metalDevice->newTexture(textureDesc);
 	drawingTexture->setLabel(NS::String::string("drawingTexture", NS::ASCIIStringEncoding));
+	distanceTexture = metalDevice->newTexture(textureDesc);
+	distanceTexture->setLabel(NS::String::string("distanceTexture", NS::ASCIIStringEncoding));
+	seedTexture = metalDevice->newTexture(textureDesc);
+	seedTexture->setLabel(NS::String::string("seedTexture", NS::ASCIIStringEncoding));
 }
 
 void Engine::updateRenderPassDescriptor() {
@@ -316,6 +362,7 @@ void Engine::updateRenderPassDescriptor() {
     renderPassDescriptor->colorAttachments()->object(0)->setTexture(metalDrawable->texture());
 }
 
+#pragma mark drawTexture
 void Engine::drawTexture(MTL::CommandBuffer* commandBuffer) {
 	MTL::RenderPassDescriptor* drawingRenderPass = MTL::RenderPassDescriptor::alloc()->init();
 	drawingRenderPass->colorAttachments()->object(0)->setTexture(drawingTexture);
@@ -340,6 +387,32 @@ void Engine::drawTexture(MTL::CommandBuffer* commandBuffer) {
 	drawingRenderPass->release();
 }
 
+#pragma mark drawSeed
+void Engine::drawSeed(MTL::CommandBuffer* commandBuffer) {
+	MTL::RenderPassDescriptor* renderPass = MTL::RenderPassDescriptor::alloc()->init();
+	renderPass->colorAttachments()->object(0)->setTexture(seedTexture);
+	renderPass->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionClear);
+	renderPass->colorAttachments()->object(0)->setStoreAction(MTL::StoreActionStore);
+	renderPass->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(1.0, 1.0, 1.0, 1.0));
+
+	MTL::RenderCommandEncoder* renderCommandEncoder = commandBuffer->renderCommandEncoder(renderPass);
+	renderCommandEncoder->pushDebugGroup(NS::String::string("Seed Render Pass", NS::ASCIIStringEncoding));
+
+	renderCommandEncoder->setRenderPipelineState(seedRenderPipelineState);
+
+	renderCommandEncoder->setVertexBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
+    renderCommandEncoder->setFragmentBytes(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
+	renderCommandEncoder->setFragmentTexture(drawingTexture, TextureIndexDrawing);
+
+	renderCommandEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0, 3, 1);
+
+	renderCommandEncoder->popDebugGroup();
+	renderCommandEncoder->endEncoding();
+
+	renderPass->release();
+}
+
+#pragma mark performJFA
 void Engine::performJFA(MTL::CommandBuffer* commandBuffer) {
 	MTL::TextureDescriptor* desc = MTL::TextureDescriptor::texture2DDescriptor(
 		metalDrawable->layer()->pixelFormat(),
@@ -352,7 +425,7 @@ void Engine::performJFA(MTL::CommandBuffer* commandBuffer) {
 	MTL::Texture* renderA = metalDevice->newTexture(desc);
 	MTL::Texture* renderB = metalDevice->newTexture(desc);
 	
-	MTL::Texture* currentInput = drawingTexture;
+	MTL::Texture* currentInput = seedTexture;
 	MTL::Texture* currentOutput = renderA;
 	
 	MTL::RenderPassDescriptor* jfaRenderPass = MTL::RenderPassDescriptor::alloc()->init();
@@ -375,6 +448,7 @@ void Engine::performJFA(MTL::CommandBuffer* commandBuffer) {
 
 		jfaEncoder->setVertexBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
 		jfaEncoder->setFragmentBuffer(jfaOffsetBuffer[currentFrameIndex][stage], 0, BufferIndexJFAParams);
+        jfaEncoder->setFragmentBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
 		jfaEncoder->setFragmentTexture(currentInput, TextureIndexDrawing);
 		
 		jfaEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0, 3, 1);
@@ -391,7 +465,6 @@ void Engine::performJFA(MTL::CommandBuffer* commandBuffer) {
 	MTL::BlitCommandEncoder* blitEncoder = commandBuffer->blitCommandEncoder();
 	MTL::Origin origin = MTL::Origin(0, 0, 0);
 	MTL::Size size = MTL::Size(jfaTexture->width(), jfaTexture->height(), 1);
-	
 	blitEncoder->copyFromTexture(currentInput, 0, 0, origin, size, jfaTexture, 0, 0, origin);
 	blitEncoder->endEncoding();
 
@@ -400,8 +473,33 @@ void Engine::performJFA(MTL::CommandBuffer* commandBuffer) {
 	jfaRenderPass->release();
 }
 
-void Engine::performComposition(MTL::CommandBuffer* commandBuffer) {
+#pragma mark drawDistanceTexture
+void Engine::drawDistanceTexture(MTL::CommandBuffer* commandBuffer) {
+	MTL::RenderPassDescriptor* renderPass = MTL::RenderPassDescriptor::alloc()->init();
+	renderPass->colorAttachments()->object(0)->setTexture(distanceTexture);
+	renderPass->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionLoad);
+	renderPass->colorAttachments()->object(0)->setStoreAction(MTL::StoreActionStore);
+	renderPass->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(1.0, 1.0, 1.0, 1.0));
+
+	MTL::RenderCommandEncoder* renderCommandEncoder = commandBuffer->renderCommandEncoder(renderPass);
+	renderCommandEncoder->pushDebugGroup(NS::String::string("Distance Render Pass", NS::ASCIIStringEncoding));
 	
+	renderCommandEncoder->setRenderPipelineState(distanceRenderPipelineState);
+	
+	renderCommandEncoder->setVertexBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
+	renderCommandEncoder->setFragmentTexture(jfaTexture, TextureIndexJFA);
+    renderCommandEncoder->setFragmentBytes(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
+	
+	renderCommandEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0, 3, 1);
+	
+	renderCommandEncoder->popDebugGroup();
+	renderCommandEncoder->endEncoding();
+	
+	renderPass->release();
+}
+
+#pragma mark performComposition
+void Engine::performComposition(MTL::CommandBuffer* commandBuffer) {
 	renderPassDescriptor->colorAttachments()->object(0)->setTexture(metalDrawable->texture());
 
 	MTL::RenderCommandEncoder* compositionEncoder = commandBuffer->renderCommandEncoder(renderPassDescriptor);
@@ -411,7 +509,7 @@ void Engine::performComposition(MTL::CommandBuffer* commandBuffer) {
 	
 	compositionEncoder->setVertexBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
 	compositionEncoder->setFragmentBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
-	compositionEncoder->setFragmentTexture(jfaTexture, TextureIndexJFA);
+	compositionEncoder->setFragmentTexture(distanceTexture, TextureIndexDistance);
 	compositionEncoder->setFragmentTexture(drawingTexture, TextureIndexDrawing);
 	
 	compositionEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0, 3, 1);
@@ -420,11 +518,14 @@ void Engine::performComposition(MTL::CommandBuffer* commandBuffer) {
 	compositionEncoder->endEncoding();
 }
 
+#pragma mark draw
 void Engine::draw() {
 	MTL::CommandBuffer* commandBuffer = beginDrawableCommands(false);
 	if (commandBuffer) {
 		drawTexture(commandBuffer);
+		drawSeed(commandBuffer);
 		performJFA(commandBuffer);
+		drawDistanceTexture(commandBuffer);
 		performComposition(commandBuffer);
 
 		endFrame(commandBuffer, metalDrawable);

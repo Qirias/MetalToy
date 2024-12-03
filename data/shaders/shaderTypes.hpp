@@ -24,5 +24,6 @@ typedef enum BufferIndex {
 typedef enum TextureIndex {
 	TextureIndexDrawing = 0,
 	TextureIndexJFA = 1,
-	TextureIndexScreen = 2
+	TextureIndexDistance = 2,
+	TextureIndexScreen = 3
 } TextureIndex;

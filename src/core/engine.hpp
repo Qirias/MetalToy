@@ -49,7 +49,9 @@ private:
     void presentTexture(MTL::RenderCommandEncoder* renderCommandEncoder);
 
 	void drawTexture(MTL::CommandBuffer* commandBuffer);
+	void drawSeed(MTL::CommandBuffer* commandBuffer);
 	void performJFA(MTL::CommandBuffer* commandBuffer);
+	void drawDistanceTexture(MTL::CommandBuffer* commandBuffer);
 	void performComposition(MTL::CommandBuffer* commandBuffer);
 
 	void createRenderPassDescriptor();
@@ -94,14 +96,19 @@ private:
     MTL::RenderPassDescriptor*  renderPassDescriptor;
 
     MTL::Texture*               drawingTexture;
+	MTL::Texture*				seedTexture;
     MTL::Texture*               jfaTexture;
+	MTL::Texture*               distanceTexture;
+    MTL::PixelFormat            pixelFormat;
 
     MTL::Library*               metalDefaultLibrary;
     MTL::CommandQueue*          metalCommandQueue;
 
 	// Render Pipeline States
 	MTL::RenderPipelineState*   drawingRenderPipelineState;
+	MTL::RenderPipelineState*   seedRenderPipelineState;
 	MTL::RenderPipelineState*   jfaRenderPipelineState;
+	MTL::RenderPipelineState*   distanceRenderPipelineState;
 	MTL::RenderPipelineState*   compositionRenderPipelineState;
 
     MTL::SamplerState*          samplerState;

@@ -2,7 +2,11 @@
 #include <metal_stdlib>
 using namespace metal;
 
-constexpr sampler samplerNearest(filter::nearest, address::clamp_to_edge);
+constexpr sampler samplerNearest(s_address::clamp_to_edge,
+                                 t_address::clamp_to_edge,
+                                 r_address::clamp_to_edge,
+                                 mag_filter::nearest,
+                                 min_filter::nearest);
 
 struct VertexOut {
 	float4 position [[position]];
@@ -49,4 +53,5 @@ static half4 sampleTexture(texture2d<half, access::read_write> tex, float2 uv) {
 constant float PI = 3.14159265;
 constant float TAU = 6.2831853072;
 constant int rayCount = 4;
-constant int maxSteps = 256;
+constant int maxSteps = 32;
+constant float EPS = 0.001;

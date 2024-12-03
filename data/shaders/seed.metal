@@ -1,0 +1,16 @@
+#define METAL
+#include <metal_stdlib>
+using namespace metal;
+
+#include "shaderTypes.hpp"
+#include "common.metal"
+
+
+fragment half4 fragment_seed(VertexOut 			in 			[[stage_in]],
+							 texture2d<half> 	drawing 	[[texture(TextureIndexDrawing)]],
+                 constant    FrameData&         frameData   [[buffer(BufferIndexFrameData)]]) {
+
+	float2 uv = in.texCoords;
+	float alpha = drawing.sample(samplerNearest, uv).a;
+	return half4(uv.x*alpha, uv.y*alpha, 0.0, 1.0);
+}

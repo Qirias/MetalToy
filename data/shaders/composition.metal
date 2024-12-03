@@ -5,7 +5,7 @@ using namespace metal;
 #include "shaderTypes.hpp"
 #include "common.metal"
 
-half4 rayMarch(float2 uv, float2 resolution, texture2d<half> drawingTexture) {
+half4 rayMarch(float2 uv, float2 resolution, texture2d<half> drawingTexture, texture2d<half> distanceTexture) {
     half4 light = drawingTexture.sample(samplerNearest, uv);
     
     if (light.a > 0.1) {
@@ -20,29 +20,35 @@ half4 rayMarch(float2 uv, float2 resolution, texture2d<half> drawingTexture) {
     half4 radiance = half4(0.0);
     
     for (int i = 0; i < rayCount; i++) {
-        float angle = tauOverRayCount * (float(i) + noise);
-        float2 rayDirectionUV = float2(cos(angle), -sin(angle)) / resolution;
+        float angle = tauOverRayCount * (float(i));
+        float2 rayDirection = float2(cos(angle), -sin(angle));
+
+        float2 sampleUV = uv;
+		half4 radDelta = half4(0.0);
         
-        float2 sampleUV = uv + rayDirectionUV;
-        
-        for (int step = 0; step < maxSteps; step++) {
+        for (int step = 1; step < maxSteps; step++) {
+			// How far away is the nearest object?
+			float dist = distanceTexture.sample(samplerNearest, sampleUV).x;
+			
+			// Go to the direction we are traveling with noise
+			sampleUV += rayDirection * dist;
+			
             if (outOfBounds(sampleUV)) break;
-            
-            half4 sampleLight = drawingTexture.sample(samplerNearest, sampleUV);
-            if (sampleLight.a > 0.5) {
-                radiance += sampleLight;
-                break;
-            }
-            
-            sampleUV += rayDirectionUV;
+			
+			if (dist < EPS) {
+				// Collect the radiance
+				radDelta += drawingTexture.sample(samplerNearest, sampleUV);
+				break;
+			}
         }
+		radiance += radDelta;
     }
     
-    return radiance * oneOverRayCount;
+	return radiance * oneOverRayCount;
 }
 
 fragment half4 fragment_composition(	VertexOut 			in 				[[stage_in]],
-										texture2d<half> 	jfaTexture  	[[texture(TextureIndexJFA)]],
+										texture2d<half> 	distanceTexture [[texture(TextureIndexDistance)]],
 										texture2d<half> 	drawingTexture  [[texture(TextureIndexDrawing)]],
 							constant 	FrameData&          frameData       [[buffer(BufferIndexFrameData)]]) {
 
@@ -52,17 +58,12 @@ fragment half4 fragment_composition(	VertexOut 			in 				[[stage_in]],
     float2 normalizedCurrMouse = frameData.mouseCoords.xy / float2(width, height);
     float2 normalizedPrevMouse = frameData.prevMouse / float2(width, height);
 	float2 uv = in.texCoords;
-
-	half4 drawingColor = drawingTexture.sample(samplerNearest, uv);
     
-    half4 rayMarchedColor = rayMarch(uv, float2(width, height), drawingTexture);
+    half4 rayMarchedColor = rayMarch(uv, float2(width, height), drawingTexture, distanceTexture);
     
     rayMarchedColor = gammaCorrect(rayMarchedColor);
-    
-    half4 finalColor = mix(drawingColor, rayMarchedColor, rayMarchedColor.a);
 
-//	finalColor = jfaTexture.sample(samplerNearest, uv);
+	rayMarchedColor = distanceTexture.sample(samplerNearest, uv);
 
-	return finalColor;
-//	return half4(uv.x * finalColor.a, uv.y * finalColor.a, 0.0, 1.0);
+	return rayMarchedColor;
 }
