@@ -20,23 +20,21 @@ half4 rayMarch(float2 uv, float2 resolution, texture2d<half> drawingTexture, tex
     half4 radiance = half4(0.0);
     
     for (int i = 0; i < rayCount; i++) {
-        float angle = tauOverRayCount * (float(i));
+        float angle = tauOverRayCount * (float(i) + noise);
         float2 rayDirection = float2(cos(angle), -sin(angle));
 
         float2 sampleUV = uv;
 		half4 radDelta = half4(0.0);
         
         for (int step = 1; step < maxSteps; step++) {
-			// How far away is the nearest object?
+            
 			float dist = distanceTexture.sample(samplerNearest, sampleUV).x;
 			
-			// Go to the direction we are traveling with noise
 			sampleUV += rayDirection * dist;
 			
             if (outOfBounds(sampleUV)) break;
 			
 			if (dist < EPS) {
-				// Collect the radiance
 				radDelta += drawingTexture.sample(samplerNearest, sampleUV);
 				break;
 			}
@@ -63,7 +61,7 @@ fragment half4 fragment_composition(	VertexOut 			in 				[[stage_in]],
     
     rayMarchedColor = gammaCorrect(rayMarchedColor);
 
-	rayMarchedColor = distanceTexture.sample(samplerNearest, uv);
+//	rayMarchedColor = distanceTexture.sample(samplerNearest, uv);
 
 	return rayMarchedColor;
 }

@@ -12,28 +12,24 @@ fragment half4 fragment_jfa(	VertexOut 		in 			[[stage_in]],
                     constant    FrameData&      frameData   [[buffer(BufferIndexFrameData)]]) {
 	
     float2 uv = in.texCoords;
-    uint2 resolution = uint2(frameData.framebuffer_width, frameData.framebuffer_height);
+    uint2 resolution = uint2(frameData.width, frameData.height);
 
 	if (params.skip) {
 		return half4(uv.x, uv.y, 0.0, 1.0);
 	}
 
-	half4 nearestSeed = half4(0.0);
+	float4 nearestSeed = float4(-2.0);
 	float nearestDist = FLT_MAX;
-
-	// 3x3 neighborhood sampling
+    
 	for (float y = -1.0; y <= 1.0; y += 1.0) {
 		for (float x = -1.0; x <= 1.0; x += 1.0) {
-//            float2 sampleTexel = uv * float2(resolution);
-//            uint2 sampleUV = uint2(sampleTexel + float2(x, y) * params.uOffset);
 			float2 sampleUV = uv + float2(x, y) * params.uOffset * params.oneOverSize;
 
 			if (sampleUV.x < 0 || sampleUV.x > 1.0 || sampleUV.y < 0 || sampleUV.y > 1.0) {
 				continue;
 			}
 
-//			float4 sampleValue = float4(inputTex.read(sampleUV));
-            half4 sampleValue = inputTex.sample(samplerNearest, sampleUV);
+            float4 sampleValue = float4(inputTex.read(uint2(sampleUV*float2(resolution))));
 			float2 sampleSeed = float2(sampleValue.xy);
 
 			// If sample has a seed
@@ -41,7 +37,7 @@ fragment half4 fragment_jfa(	VertexOut 		in 			[[stage_in]],
 				float2 diff = sampleSeed - uv;
 				float dist = dot(diff, diff);
 
-				if (dist <= nearestDist) {
+				if (dist < nearestDist) {
 					nearestDist = dist;
 					nearestSeed = sampleValue;
 				}

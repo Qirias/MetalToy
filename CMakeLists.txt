@@ -53,6 +53,8 @@ foreach(SHADER_SOURCE ${SHADER_SOURCES})
                 -I ${CMAKE_CURRENT_SOURCE_DIR}/src/core
                 -Wno-unused-variable
                 -Wno-unused-function
+                # -gline-tables-only
+                # -frecord-sources=flat
         DEPENDS ${SHADER_SOURCE}  # Add each shader source as a dependency
         COMMENT "Compiling ${SHADER_NAME}.metal to AIR"
     )
@@ -61,8 +63,6 @@ endforeach()
 # Set the final metallib path
 set(SHADER_METALLIB "${CMAKE_CURRENT_BINARY_DIR}/default.metallib")
 add_definitions(-DSHADER_METALLIB="${SHADER_METALLIB}")
-
-# xattr -c default.metallib if metallib is flagged as quarantined
 
 # Create metallib from all AIR files
 add_custom_command(

@@ -25,6 +25,7 @@ void Engine::init() {
 	createRenderPassDescriptor();
 }
 
+
 void Engine::run() {
     while (!glfwWindowShouldClose(glfwWindow)) {
         float currentFrame = glfwGetTime();
@@ -48,13 +49,11 @@ void Engine::cleanup() {
 	
 	for(uint8_t frame = 0; frame < MaxFramesInFlight; frame++) {
 		frameDataBuffers[frame]->release();
+        
+        for(uint8_t stage = 0; stage < MAXSTAGES; stage++) {
+            jfaOffsetBuffer[frame][stage]->release();
+        }
     }
-	
-	for(uint8_t frame = 0; frame < MaxFramesInFlight; frame++) {
-		for(uint8_t stage = 0; stage < MAXSTAGES; stage++) {
-			jfaOffsetBuffer[frame][stage]->release();
-		}
-	}
 	
 	drawingTexture->release();
 	seedTexture->release();
@@ -93,6 +92,9 @@ void Engine::resizeFrameBuffer(int width, int height) {
     // Deallocate the textures if they have been created
 	if (drawingTexture) { drawingTexture->release(); 	drawingTexture = nullptr; }
 	if (jfaTexture) { jfaTexture->release(); 			jfaTexture = nullptr; }
+    if (seedTexture) { seedTexture->release();          seedTexture = nullptr; }
+    if (distanceTexture) { distanceTexture->release();  distanceTexture = nullptr; }
+    
 	
 	createRenderPassDescriptor();
     metalDrawable = (__bridge CA::MetalDrawable*)[metalLayer nextDrawable];
@@ -202,8 +204,8 @@ void Engine::updateWorldState(bool isPaused) {
 
 	float aspectRatio = metalDrawable->layer()->drawableSize().width / metalDrawable->layer()->drawableSize().height;
 
-	frameData->framebuffer_width = (uint)metalLayer.drawableSize.width;
-	frameData->framebuffer_height = (uint)metalLayer.drawableSize.height;
+	frameData->width = (uint)metalLayer.drawableSize.width;
+	frameData->height = (uint)metalLayer.drawableSize.height;
 
 	frameData->time = glfwGetTime();
 	
@@ -327,14 +329,6 @@ void Engine::createRenderPipelines() {
 void Engine::createRenderPassDescriptor() {
     renderPassDescriptor = MTL::RenderPassDescriptor::alloc()->init();
 
-    MTL::SamplerDescriptor* samplerDescriptor = MTL::SamplerDescriptor::alloc()->init();
-	samplerDescriptor->setMinFilter(MTL::SamplerMinMagFilterLinear);
-    samplerDescriptor->setMagFilter(MTL::SamplerMinMagFilterLinear);
-	samplerDescriptor->setMipFilter(MTL::SamplerMipFilterNotMipmapped);
-    samplerDescriptor->setSAddressMode(MTL::SamplerAddressModeClampToEdge);
-    samplerDescriptor->setTAddressMode(MTL::SamplerAddressModeClampToEdge);
-    samplerState = metalDevice->newSamplerState(samplerDescriptor);
-
 	MTL::TextureDescriptor* textureDesc = MTL::TextureDescriptor::alloc()->init();
 	textureDesc->setPixelFormat(pixelFormat);
 	textureDesc->setWidth(metalLayer.drawableSize.width);
@@ -401,7 +395,7 @@ void Engine::drawSeed(MTL::CommandBuffer* commandBuffer) {
 	renderCommandEncoder->setRenderPipelineState(seedRenderPipelineState);
 
 	renderCommandEncoder->setVertexBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
-    renderCommandEncoder->setFragmentBytes(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
+    renderCommandEncoder->setFragmentBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
 	renderCommandEncoder->setFragmentTexture(drawingTexture, TextureIndexDrawing);
 
 	renderCommandEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0, 3, 1);
@@ -442,7 +436,7 @@ void Engine::performJFA(MTL::CommandBuffer* commandBuffer) {
 		jfaEncoder->pushDebugGroup(NS::String::string("Jump Flood Algorithm Render Pass", NS::ASCIIStringEncoding));
 		jfaEncoder->setRenderPipelineState(jfaRenderPipelineState);
 		
-		params->uOffset = pow(2.0, jfaPasses - stage - 1);
+        params->uOffset = pow(2.0, jfaPasses - stage - 1);
 		params->skip = (jfaPasses == 0) ? 1 : 0;
 		params->oneOverSize = simd::float2{1.0f / jfaTexture->width(), 1.0f / jfaTexture->height()};
 
@@ -488,7 +482,7 @@ void Engine::drawDistanceTexture(MTL::CommandBuffer* commandBuffer) {
 	
 	renderCommandEncoder->setVertexBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
 	renderCommandEncoder->setFragmentTexture(jfaTexture, TextureIndexJFA);
-    renderCommandEncoder->setFragmentBytes(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
+    renderCommandEncoder->setFragmentBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
 	
 	renderCommandEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0, 3, 1);
 	
