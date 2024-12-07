@@ -51,7 +51,7 @@ private:
 
 	void drawTexture(MTL::CommandBuffer* commandBuffer);
 	void drawSeed(MTL::CommandBuffer* commandBuffer);
-	void performJFA(MTL::CommandBuffer* commandBuffer);
+	void JFAPass(MTL::CommandBuffer* commandBuffer);
 	void drawDistanceTexture(MTL::CommandBuffer* commandBuffer);
     void rcPass(MTL::CommandBuffer* commandBuffer);
 	void performComposition(MTL::CommandBuffer* commandBuffer);

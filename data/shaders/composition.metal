@@ -8,32 +8,46 @@ using namespace metal;
 half4 rayMarch(float2 uv, float2 resolution, texture2d<half> drawingTexture, texture2d<half> distanceTexture, texture2d<half> lastTexture, float2 effectiveUV, rcParams rcData) {
     half4 light = drawingTexture.sample(samplerNearest, uv);
     
-    float partial = 0.125;
-    float intervalStart = rcData.rayCount == rcData.baseRayCount ? 0.0 : partial;
-    float intervalEnd = rcData.rayCount == rcData.baseRayCount ? partial : sqrt(2.0);
+    float partial = 0.0;
     
-    if (light.a > 0.1) {
-        return light;
-    }
-    
+    float sqrtBase = sqrt(float(rcData.baseRayCount));
     float oneOverRayCount = 1.0 / float(rcData.rayCount);
-    float tauOverRayCount = TAU * oneOverRayCount;
+    float angleStepSize = TAU / float(rcData.rayCount);
+    float2 coord = floor(uv * resolution);
+    bool firstLevel = rcData.rayCount == rcData.baseRayCount;
     
-//    float noise = rand(uv);
+    float spacing = firstLevel ? 1.0 : sqrtBase;
+    // Calculate the number of probes per x/y dimension
+    float2 size = floor(resolution / spacing);
+    // Calculate which probe we're processing this pass
+    float2 probeRelativePosition = fmod(coord, size);
+    // Calculate which group of rays we're processing this pass
+    float2 rayPos = floor(coord / size);
+    
+    float intervalStart = firstLevel ? 0.0 : partial;
+    float intervalEnd = firstLevel ? partial : sqrt(2.0);
+    
+    float2 probeCenter = (probeRelativePosition + 0.5) * spacing;
+    float2 normalizedProbeCenter = probeCenter / resolution;
+    
+    float baseIndex = float(rcData.baseRayCount) * (rayPos.x + (spacing * rayPos.y));
+    
     float2 oneOverSize = float2(1.0 / resolution);
     float2 scale = min(resolution.x, resolution.y) * oneOverSize;
+
+    
     float minStepSize = min(oneOverSize.x, oneOverSize.y) * 0.5;
+    
     
     half4 radiance = half4(0.0);
     
-    for (int i = 0; i < rcData.rayCount; i++) {
-        float index = float(i);
+    for (int i = 0; i < int(rcData.rayCount); i++) {
+        float index = baseIndex + float(i);
         float angleStep = index + 0.5;
-        float angle = tauOverRayCount * angleStep;
-        
+        float angle = angleStepSize * angleStep;
         float2 rayDirection = float2(cos(angle), -sin(angle));
 
-        float2 sampleUV = effectiveUV + rayDirection * intervalStart * scale;
+        float2 sampleUV = normalizedProbeCenter + rayDirection * intervalStart * scale;
 		half4 radDelta = half4(0.0);
         float traveled = intervalStart;
         
@@ -45,17 +59,27 @@ half4 rayMarch(float2 uv, float2 resolution, texture2d<half> drawingTexture, tex
 			
             if (outOfBounds(sampleUV)) break;
 			
-			if (dist < minStepSize) {
-				radDelta += drawingTexture.sample(samplerNearest, sampleUV);
+			if (dist <= minStepSize) {
+				radDelta += gammaCorrect(drawingTexture.sample(samplerNearest, sampleUV));
 				break;
 			}
             traveled += dist;
             if (traveled >= intervalEnd) break;
         }
         
-        if (rcData.rayCount == rcData.baseRayCount && radDelta.a == 0.0) {
-            half4 upperSample = lastTexture.sample(samplerNearest, uv);
-            radDelta += half4(upperSample.rgb, upperSample.a);
+        bool nonOpaque = radDelta.a == 0.0;
+        
+        if (firstLevel && nonOpaque) {
+            float2 upperSpacing = sqrtBase;
+            // Grid of probes
+            float2 upperSize = floor(resolution / upperSpacing);
+            // Position of _this_ probe
+            float2 upperPosition = (fmod(index, sqrtBase), floor(index / upperSpacing)) * upperSize;
+            
+            float2 offset = (probeRelativePosition + 0.5) / upperSpacing;
+            float2 upperUv = (upperPosition + offset) / resolution;
+            
+            radDelta += lastTexture.sample(samplerNearest, upperUv);
         }
         
 		radiance += radDelta;
@@ -81,7 +105,7 @@ fragment half4 fragment_composition(	VertexOut 			in 				[[stage_in]],
     
     half4 rayMarchedColor = rayMarch(uv, resolution, drawingTexture, distanceTexture, lastTexture, effectiveUV, rcData);
     
-    rayMarchedColor = gammaCorrect(rayMarchedColor);
+    rayMarchedColor = (rcData.lastIndex == 1.0 ? gammaCorrect(rayMarchedColor) : rayMarchedColor);
 
 	return rayMarchedColor;
 }

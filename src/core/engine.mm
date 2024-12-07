@@ -7,7 +7,7 @@ Engine::Engine()
 , currentFrameIndex(0)
 , pixelFormat(MTL::PixelFormatRGBA8Unorm)
 , jfaPasses(0)
-, baseRayCount(4) {
+, baseRayCount(16) {
 	inFlightSemaphore = dispatch_semaphore_create(MaxFramesInFlight);
 
     for (int i = 0; i < MaxFramesInFlight; i++) {
@@ -425,8 +425,8 @@ void Engine::drawSeed(MTL::CommandBuffer* commandBuffer) {
 	renderPass->release();
 }
 
-#pragma mark performJFA
-void Engine::performJFA(MTL::CommandBuffer* commandBuffer) {
+#pragma mark JFAPass
+void Engine::JFAPass(MTL::CommandBuffer* commandBuffer) {
 	MTL::TextureDescriptor* desc = MTL::TextureDescriptor::texture2DDescriptor(
 		metalDrawable->layer()->pixelFormat(),
 		metalDrawable->layer()->drawableSize().width,
@@ -538,10 +538,15 @@ void Engine::rcPass(MTL::CommandBuffer *commandBuffer) {
             renderPass->colorAttachments()->object(0)->setTexture(rcRenderTargets[prev]);
             lastTexture = rcRenderTargets[prev];
             prev = 1 - prev;
+            params->lastIndex = 0.0;
         } else {
             params->baseRayCount = baseRayCount;
             params->rayCount = baseRayCount;
+            params->lastIndex = 1.0;
             renderPass->colorAttachments()->object(0)->setTexture(metalDrawable->texture());
+            renderPass->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionClear);
+            renderPass->colorAttachments()->object(0)->setStoreAction(MTL::StoreActionStore);
+            renderPass->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(0.0, 0.0, 0.0, 1.0));
         }
         
         MTL::RenderCommandEncoder* renderCommandEncoder = commandBuffer->renderCommandEncoder(renderPass);
@@ -569,25 +574,25 @@ void Engine::rcPass(MTL::CommandBuffer *commandBuffer) {
     lastTexture = nil;
 }
 
-#pragma mark performComposition
-//void Engine::performComposition(MTL::CommandBuffer* commandBuffer) {
-//	renderPassDescriptor->colorAttachments()->object(0)->setTexture(metalDrawable->texture());
-//
-//	MTL::RenderCommandEncoder* compositionEncoder = commandBuffer->renderCommandEncoder(renderPassDescriptor);
-//	compositionEncoder->pushDebugGroup(NS::String::string("Composition Render Pass", NS::ASCIIStringEncoding));
-//	
-//	compositionEncoder->setRenderPipelineState(compositionRenderPipelineState);
-//	
-//	compositionEncoder->setVertexBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
-//	compositionEncoder->setFragmentBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
-//	compositionEncoder->setFragmentTexture(distanceTexture, TextureIndexDistance);
-//	compositionEncoder->setFragmentTexture(drawingTexture, TextureIndexDrawing);
-//	
-//	compositionEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0, 3, 1);
-//	
-//	compositionEncoder->popDebugGroup();
-//	compositionEncoder->endEncoding();
-//}
+// Unused
+void Engine::performComposition(MTL::CommandBuffer* commandBuffer) {
+	renderPassDescriptor->colorAttachments()->object(0)->setTexture(metalDrawable->texture());
+
+	MTL::RenderCommandEncoder* compositionEncoder = commandBuffer->renderCommandEncoder(renderPassDescriptor);
+	compositionEncoder->pushDebugGroup(NS::String::string("Composition Render Pass", NS::ASCIIStringEncoding));
+	
+	compositionEncoder->setRenderPipelineState(compositionRenderPipelineState);
+	
+	compositionEncoder->setVertexBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
+	compositionEncoder->setFragmentBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
+	compositionEncoder->setFragmentTexture(distanceTexture, TextureIndexDistance);
+	compositionEncoder->setFragmentTexture(drawingTexture, TextureIndexDrawing);
+	
+	compositionEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0, 3, 1);
+	
+	compositionEncoder->popDebugGroup();
+	compositionEncoder->endEncoding();
+}
 
 #pragma mark draw
 void Engine::draw() {
@@ -595,10 +600,9 @@ void Engine::draw() {
 	if (commandBuffer) {
 		drawTexture(commandBuffer);
 		drawSeed(commandBuffer);
-		performJFA(commandBuffer);
+        JFAPass(commandBuffer);
 		drawDistanceTexture(commandBuffer);
         rcPass(commandBuffer);
-//		performComposition(commandBuffer);
 
 		endFrame(commandBuffer, metalDrawable);
 	}
