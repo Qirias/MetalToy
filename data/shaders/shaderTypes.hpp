@@ -16,14 +16,21 @@ struct JFAParams {
     int skip;
 };
 
+struct rcParams {
+    float rayCount;
+    uint baseRayCount;
+};
+
 typedef enum BufferIndex {
 	BufferIndexFrameData = 0,
-	BufferIndexJFAParams = 1
+	BufferIndexJFAParams = 1,
+    BufferIndexRCParams = 2
 } BufferIndex;
 
 typedef enum TextureIndex {
 	TextureIndexDrawing = 0,
 	TextureIndexJFA = 1,
 	TextureIndexDistance = 2,
-	TextureIndexScreen = 3
+	TextureIndexScreen = 3,
+    TextureIndexLast = 4
 } TextureIndex;

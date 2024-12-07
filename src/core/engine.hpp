@@ -25,6 +25,7 @@
 
 constexpr uint8_t MaxFramesInFlight = 3;
 constexpr uint8_t MAXSTAGES = 12;
+constexpr uint8_t NUM_OF_CASCADES = 2;
 
 
 class Engine {
@@ -52,6 +53,7 @@ private:
 	void drawSeed(MTL::CommandBuffer* commandBuffer);
 	void performJFA(MTL::CommandBuffer* commandBuffer);
 	void drawDistanceTexture(MTL::CommandBuffer* commandBuffer);
+    void rcPass(MTL::CommandBuffer* commandBuffer);
 	void performComposition(MTL::CommandBuffer* commandBuffer);
 
 	void createRenderPassDescriptor();
@@ -76,6 +78,8 @@ private:
 	// Buffers used to store dynamically changing per-frame data
 	MTL::Buffer* 							frameDataBuffers[MaxFramesInFlight];
 	std::vector<std::vector<MTL::Buffer*>> 	jfaOffsetBuffer;
+    std::vector<std::vector<MTL::Buffer*>>  rcBuffer;
+    
 
     MTL::Device*        metalDevice;
     GLFWwindow*         glfwWindow;
@@ -95,6 +99,7 @@ private:
     // Renderpass descriptors
     MTL::RenderPassDescriptor*  renderPassDescriptor;
 
+    MTL::Texture*               lastTexture;
     MTL::Texture*               drawingTexture;
 	MTL::Texture*				seedTexture;
     MTL::Texture*               jfaTexture;
@@ -118,5 +123,7 @@ private:
     uint64_t                    frameNumber;
     uint8_t                     frameDataBufferIndex;
 	
+    // Jump Flood Algorithm
 	uint8_t						jfaPasses;
+    uint8_t                     baseRayCount;
 };
