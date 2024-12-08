@@ -59,7 +59,6 @@ void Engine::cleanup() {
         }
     }
 	
-    lastTexture->release();
 	drawingTexture->release();
 	seedTexture->release();
 	jfaTexture->release();
@@ -99,7 +98,6 @@ void Engine::resizeFrameBuffer(int width, int height) {
     if (jfaTexture)         {   jfaTexture->release(); 		    jfaTexture = nullptr;       }
     if (seedTexture)        {   seedTexture->release();         seedTexture = nullptr;      }
     if (distanceTexture)    {   distanceTexture->release();     distanceTexture = nullptr;  }
-    if (lastTexture)        {   lastTexture->release();         lastTexture = nullptr;      }
     
 	
 	createRenderPassDescriptor();
@@ -362,8 +360,6 @@ void Engine::createRenderPassDescriptor() {
 	distanceTexture->setLabel(NS::String::string("distanceTexture", NS::ASCIIStringEncoding));
 	seedTexture = metalDevice->newTexture(textureDesc);
 	seedTexture->setLabel(NS::String::string("seedTexture", NS::ASCIIStringEncoding));
-    lastTexture = metalDevice->newTexture(textureDesc);
-    lastTexture->setLabel(NS::String::string("lastTexture", NS::ASCIIStringEncoding));
 }
 
 void Engine::updateRenderPassDescriptor() {
@@ -513,10 +509,13 @@ void Engine::drawDistanceTexture(MTL::CommandBuffer* commandBuffer) {
 
 #pragma mark rcPass
 void Engine::rcPass(MTL::CommandBuffer *commandBuffer) {
+    uint width = metalDrawable->layer()->drawableSize().width;
+    uint height = metalDrawable->layer()->drawableSize().height;
+    
     MTL::TextureDescriptor* desc = MTL::TextureDescriptor::texture2DDescriptor(
         metalDrawable->layer()->pixelFormat(),
-        metalDrawable->layer()->drawableSize().width,
-        metalDrawable->layer()->drawableSize().height,
+        width,
+        height,
         false);
     
     desc->setUsage(MTL::TextureUsageShaderRead | MTL::TextureUsageShaderWrite | MTL::TextureUsageRenderTarget);
@@ -527,29 +526,38 @@ void Engine::rcPass(MTL::CommandBuffer *commandBuffer) {
     
     MTL::RenderPassDescriptor* renderPass = MTL::RenderPassDescriptor::alloc()->init();
     
-    int prev = 0;
+    const float diagonal = sqrtf(width * width + height * height);
+    float cascadeCount = ceil(log(diagonal) / logf(baseRayCount)) + 1;
+
+    cascadeCount = std::min(cascadeCount, static_cast<float>(NUM_OF_CASCADES));
     
-    for (int cascade = 2; cascade >= 1; cascade--) {
-        rcParams* params = (rcParams*)(rcBuffer[currentFrameIndex][cascade-1]->contents());
-        params->baseRayCount = baseRayCount;
-        params->rayCount = pow(baseRayCount, cascade);
+    MTL::Texture* lastMergeTexture = nullptr;
+    int pingPongIndex = 0;
+    
+    for (int cascade = cascadeCount - 1; cascade >= 0; cascade--) {
+        rcParams* params = reinterpret_cast<rcParams*>(rcBuffer[currentFrameIndex][cascade]->contents());
         
-        if (cascade > 1) {
-            renderPass->colorAttachments()->object(0)->setTexture(rcRenderTargets[prev]);
-            lastTexture = rcRenderTargets[prev];
-            prev = 1 - prev;
-            params->lastIndex = 0.0;
+        params->cascadeCount = cascadeCount;
+        params->base = baseRayCount;
+        params->rayCount = pow(baseRayCount, cascade + 1);
+        params->cascadeIndex = cascade;
+        
+        MTL::Texture* currentRenderTarget = nullptr;
+        
+        if (cascade == cascadeCount - 1) {
+            currentRenderTarget = rcRenderTargets[pingPongIndex];
+            lastMergeTexture = nullptr;
+        } else if (cascade > 0) {
+            currentRenderTarget = rcRenderTargets[pingPongIndex];
+            pingPongIndex = 1 - pingPongIndex;
         } else {
-            params->baseRayCount = baseRayCount;
-            params->rayCount = baseRayCount;
-            params->lastIndex = 1.0;
-            renderPass->colorAttachments()->object(0)->setTexture(metalDrawable->texture());
-            renderPass->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionClear);
-            renderPass->colorAttachments()->object(0)->setStoreAction(MTL::StoreActionStore);
-            renderPass->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(0.0, 0.0, 0.0, 1.0));
+            currentRenderTarget = metalDrawable->texture();
         }
         
+        renderPass->colorAttachments()->object(0)->setTexture(currentRenderTarget);
+        
         MTL::RenderCommandEncoder* renderCommandEncoder = commandBuffer->renderCommandEncoder(renderPass);
+        
         std::string labelStr = "Cascade: " + std::to_string(cascade);
         NS::String* label = NS::String::string(labelStr.c_str(), NS::ASCIIStringEncoding);
         renderCommandEncoder->setLabel(label);
@@ -557,21 +565,29 @@ void Engine::rcPass(MTL::CommandBuffer *commandBuffer) {
         
         renderCommandEncoder->setRenderPipelineState(compositionRenderPipelineState);
         renderCommandEncoder->setVertexBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
+        
+        // textures
         renderCommandEncoder->setFragmentTexture(distanceTexture, TextureIndexDistance);
         renderCommandEncoder->setFragmentTexture(drawingTexture, TextureIndexDrawing);
-        renderCommandEncoder->setFragmentTexture(lastTexture, TextureIndexLast);
+        renderCommandEncoder->setFragmentTexture(lastMergeTexture, TextureIndexLast);
+        
+        // buffers
         renderCommandEncoder->setFragmentBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
-        renderCommandEncoder->setFragmentBuffer(rcBuffer[currentFrameIndex][cascade-1], 0, BufferIndexRCParams);
+        renderCommandEncoder->setFragmentBuffer(rcBuffer[currentFrameIndex][cascade], 0, BufferIndexRCParams);
         
         renderCommandEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0, 3, 1);
+        
         renderCommandEncoder->popDebugGroup();
         renderCommandEncoder->endEncoding();
+        
+        if (cascade > 0) {
+            lastMergeTexture = currentRenderTarget;
+        }
     }
     
     renderPass->release();
     rcRenderTargets[0]->release();
     rcRenderTargets[1]->release();
-    lastTexture = nil;
 }
 
 // Unused

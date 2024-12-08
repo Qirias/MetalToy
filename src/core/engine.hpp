@@ -25,7 +25,7 @@
 
 constexpr uint8_t MaxFramesInFlight = 3;
 constexpr uint8_t MAXSTAGES = 12;
-constexpr uint8_t NUM_OF_CASCADES = 2;
+constexpr uint8_t NUM_OF_CASCADES = 10;
 
 
 class Engine {
@@ -99,7 +99,6 @@ private:
     // Renderpass descriptors
     MTL::RenderPassDescriptor*  renderPassDescriptor;
 
-    MTL::Texture*               lastTexture;
     MTL::Texture*               drawingTexture;
 	MTL::Texture*				seedTexture;
     MTL::Texture*               jfaTexture;

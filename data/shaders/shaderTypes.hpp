@@ -18,9 +18,9 @@ struct JFAParams {
 
 struct rcParams {
     float rayCount;
-    uint lastIndex;
-    uint baseRayCount;
-    uint padding;
+    float base;
+    float cascadeIndex;
+    float cascadeCount;
 };
 
 typedef enum BufferIndex {

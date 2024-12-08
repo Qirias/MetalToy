@@ -23,8 +23,8 @@ static half4 draw(float2 uv
 
     half4 trailColor = colors[0];
 
-    // If any of the digits 1-5 are pressed, select the corresponding color
-    for (int i = 0; i < 6; ++i) {
+    // If any of the digits 1-7 are pressed, select the corresponding color
+    for (int i = 0; i < 7; ++i) {
         if (digits & (1 << i)) {
             trailColor = colors[i];
             break;
@@ -60,10 +60,10 @@ fragment half4 fragment_drawing(	VertexOut 			in 				[[stage_in]],
 
     if (frameData.mouseCoords.z <= 0.0f) {
         // Return the current color without modifying it (output the last drawn texture)
-        return drawingTexture.read(uint2(uv*float2(resolution)));
+        return drawingTexture.sample(samplerLinear, uv);
     }
 
-    half4 currentColor = drawingTexture.read(uint2(uv*float2(resolution)));
+    half4 currentColor = drawingTexture.sample(samplerLinear, uv);
 
     half4 newColor = draw(uv, normalizedCurrMouse, normalizedPrevMouse, 
                           frameData.mouseCoords.z, frameData.mouseCoords.w, 

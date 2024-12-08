@@ -29,7 +29,7 @@ fragment half4 fragment_jfa(	VertexOut 		in 			[[stage_in]],
 				continue;
 			}
 
-            float4 sampleValue = float4(inputTex.read(uint2(sampleUV*float2(resolution))));
+            float4 sampleValue = float4(inputTex.sample(samplerLinear, sampleUV));
 			float2 sampleSeed = float2(sampleValue.xy);
 
 			// If sample has a seed
