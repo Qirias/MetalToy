@@ -108,7 +108,7 @@ void Engine::resizeFrameBuffer(int width, int height) {
 void Engine::initWindow() {
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindow = glfwCreateWindow(600, 600, "MetalToy", NULL, NULL);
+    glfwWindow = glfwCreateWindow(1024, 1024, "MetalToy", NULL, NULL);
     if (!glfwWindow) {
         glfwTerminate();
         exit(EXIT_FAILURE);
@@ -402,7 +402,7 @@ void Engine::drawSeed(MTL::CommandBuffer* commandBuffer) {
 	renderPass->colorAttachments()->object(0)->setTexture(seedTexture);
 	renderPass->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionClear);
 	renderPass->colorAttachments()->object(0)->setStoreAction(MTL::StoreActionStore);
-	renderPass->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(1.0, 1.0, 1.0, 1.0));
+	renderPass->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(0.0, 0.0, 0.0, 1.0));
 
 	MTL::RenderCommandEncoder* renderCommandEncoder = commandBuffer->renderCommandEncoder(renderPass);
 	renderCommandEncoder->pushDebugGroup(NS::String::string("Seed Render Pass", NS::ASCIIStringEncoding));
@@ -438,6 +438,8 @@ void Engine::JFAPass(MTL::CommandBuffer* commandBuffer) {
 	MTL::Texture* currentOutput = renderA;
 	
 	MTL::RenderPassDescriptor* jfaRenderPass = MTL::RenderPassDescriptor::alloc()->init();
+    jfaRenderPass->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionClear);
+    jfaRenderPass->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(0.0, 0.0, 0.0, 1.0));
 
 	for (int stage = 0; stage < jfaPasses || (jfaPasses == 0 && stage == 0); ++stage) {
 		jfaRenderPass->colorAttachments()->object(0)->setTexture(currentOutput);
@@ -486,9 +488,9 @@ void Engine::JFAPass(MTL::CommandBuffer* commandBuffer) {
 void Engine::drawDistanceTexture(MTL::CommandBuffer* commandBuffer) {
 	MTL::RenderPassDescriptor* renderPass = MTL::RenderPassDescriptor::alloc()->init();
 	renderPass->colorAttachments()->object(0)->setTexture(distanceTexture);
-	renderPass->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionLoad);
-	renderPass->colorAttachments()->object(0)->setStoreAction(MTL::StoreActionStore);
-	renderPass->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(1.0, 1.0, 1.0, 1.0));
+    renderPass->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionClear);
+    renderPass->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(0.0, 0.0, 0.0, 1.0));
+
 
 	MTL::RenderCommandEncoder* renderCommandEncoder = commandBuffer->renderCommandEncoder(renderPass);
 	renderCommandEncoder->pushDebugGroup(NS::String::string("Distance Render Pass", NS::ASCIIStringEncoding));
@@ -546,6 +548,7 @@ void Engine::rcPass(MTL::CommandBuffer *commandBuffer) {
         
         if (cascade == cascadeCount - 1) {
             currentRenderTarget = rcRenderTargets[pingPongIndex];
+            pingPongIndex = 1 - pingPongIndex;
             lastMergeTexture = nullptr;
         } else if (cascade > 0) {
             currentRenderTarget = rcRenderTargets[pingPongIndex];
@@ -555,6 +558,9 @@ void Engine::rcPass(MTL::CommandBuffer *commandBuffer) {
         }
         
         renderPass->colorAttachments()->object(0)->setTexture(currentRenderTarget);
+        renderPass->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionClear);
+        renderPass->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(0.0, 0.0, 0.0, 1.0));
+
         
         MTL::RenderCommandEncoder* renderCommandEncoder = commandBuffer->renderCommandEncoder(renderPass);
         
