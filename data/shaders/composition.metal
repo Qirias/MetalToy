@@ -55,17 +55,19 @@ half4 rayMarch(float2 uv, float2 resolution, texture2d<half> drawingTexture, tex
 		half4 radDelta = half4(0.0);
         float traveled = 0.0;
         
-        for (int step = 1; step < maxSteps; step++) {
+        bool dontStart = outOfBounds(sampleUV);
+        
+        for (int step = 1; step < maxSteps && !dontStart; step++) {
             
-			float dist = distanceTexture.sample(samplerLinear, sampleUV).x;
+			float dist = distanceTexture.sample(samplerNearest, sampleUV).x;
 			
 			sampleUV += rayDirection * dist * scale;
 			
             if (outOfBounds(sampleUV)) break;
 			
 			if (dist <= minStepSize) {
-                half4 colorSample = drawingTexture.sample(samplerLinear, sampleUV);
-                radDelta += half4(half3(pow(colorSample.rgb, half3(2.2f))), 1.0);
+                half4 colorSample = drawingTexture.sample(samplerNearest, sampleUV);
+                radDelta += half4(half3(pow(colorSample.rgb, half3(2.2f))), colorSample.a);
 				break;
 			}
             traveled += dist;
@@ -88,7 +90,7 @@ half4 rayMarch(float2 uv, float2 resolution, texture2d<half> drawingTexture, tex
             float2 clamped = clamp(offset, float2(0.5), upperSize - 0.5);
             float2 upperUV = (upperPosition + clamped) / resolution;
             
-            radDelta += lastTexture.sample(samplerLinear, upperUV);
+            radDelta += lastTexture.sample(samplerNearest, upperUV);
         }
         
 		radiance += radDelta;
@@ -113,6 +115,6 @@ fragment half4 fragment_composition(	VertexOut 			in 				[[stage_in]],
     half4 rayMarchedColor = rayMarch(uv, resolution, drawingTexture, distanceTexture, lastTexture, rcData);
     
     rayMarchedColor = (!isLastLayer ? rayMarchedColor : gammaCorrect(rayMarchedColor));
-
+    
 	return rayMarchedColor;
 }

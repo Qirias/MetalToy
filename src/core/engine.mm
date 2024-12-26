@@ -7,7 +7,7 @@ Engine::Engine()
 , currentFrameIndex(0)
 , pixelFormat(MTL::PixelFormatRGBA8Unorm)
 , jfaPasses(0)
-, baseRayCount(16) {
+, baseRayCount(4) {
 	inFlightSemaphore = dispatch_semaphore_create(MaxFramesInFlight);
 
     for (int i = 0; i < MaxFramesInFlight; i++) {
@@ -33,10 +33,9 @@ void Engine::run() {
         lastFrame = currentFrame;
         
         camera.processKeyboardInput(glfwWindow, deltaTime);
-        
         @autoreleasepool {
             metalDrawable = (__bridge CA::MetalDrawable*)[metalLayer nextDrawable];
-			jfaPasses = ceil(log2(max(float(metalDrawable->layer()->drawableSize().width), float(metalDrawable->layer()->drawableSize().height))));
+            jfaPasses = ceil(log2(max(float(metalDrawable->layer()->drawableSize().width), float(metalDrawable->layer()->drawableSize().height))));
             draw();
         }
         
@@ -108,7 +107,7 @@ void Engine::resizeFrameBuffer(int width, int height) {
 void Engine::initWindow() {
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindow = glfwCreateWindow(1024, 1024, "MetalToy", NULL, NULL);
+    glfwWindow = glfwCreateWindow(600, 600, "MetalToy", NULL, NULL);
     if (!glfwWindow) {
         glfwTerminate();
         exit(EXIT_FAILURE);
@@ -282,7 +281,6 @@ void Engine::createRenderPipelines() {
 		renderPipelineDescriptor->release();
 	}
 
-
 	#pragma mark JFA Render Pipeline
 	{
 		MTL::Function* fragmentFunction = metalDefaultLibrary->newFunction(NS::String::string("fragment_jfa", NS::ASCIIStringEncoding));
@@ -377,7 +375,6 @@ void Engine::drawTexture(MTL::CommandBuffer* commandBuffer) {
 	drawingRenderPass->colorAttachments()->object(0)->setTexture(drawingTexture);
 	drawingRenderPass->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionLoad);
 	drawingRenderPass->colorAttachments()->object(0)->setStoreAction(MTL::StoreActionStore);
-	drawingRenderPass->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(0.0, 0.0, 0.0, 1.0));
 
 	MTL::RenderCommandEncoder* drawingEncoder = commandBuffer->renderCommandEncoder(drawingRenderPass);
 	drawingEncoder->pushDebugGroup(NS::String::string("Drawing Render Pass", NS::ASCIIStringEncoding));
@@ -441,8 +438,12 @@ void Engine::JFAPass(MTL::CommandBuffer* commandBuffer) {
     jfaRenderPass->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionClear);
     jfaRenderPass->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(0.0, 0.0, 0.0, 1.0));
 
-	for (int stage = 0; stage < jfaPasses || (jfaPasses == 0 && stage == 0); ++stage) {
+    for (int stage = 0; stage < jfaPasses; ++stage) {
 		jfaRenderPass->colorAttachments()->object(0)->setTexture(currentOutput);
+        if (stage > 0)
+            jfaRenderPass->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionLoad);
+        jfaRenderPass->colorAttachments()->object(0)->setStoreAction(MTL::StoreActionStore);
+        
 		JFAParams* params = (JFAParams*)(jfaOffsetBuffer[currentFrameIndex][stage]->contents());
 
 		MTL::RenderCommandEncoder* jfaEncoder = commandBuffer->renderCommandEncoder(jfaRenderPass);
@@ -454,8 +455,8 @@ void Engine::JFAPass(MTL::CommandBuffer* commandBuffer) {
 		jfaEncoder->setRenderPipelineState(jfaRenderPipelineState);
 		
         params->uOffset = pow(2.0, jfaPasses - stage - 1);
-		params->skip = (jfaPasses == 0) ? 1 : 0;
-		params->oneOverSize = simd::float2{1.0f / jfaTexture->width(), 1.0f / jfaTexture->height()};
+        params->skip = (jfaPasses == 0) ? 1 : 0;
+        params->oneOverSize = simd::float2{1.0f / (float)metalDrawable->layer()->drawableSize().width, 1.0f / (float)metalDrawable->layer()->drawableSize().height};
 
 		jfaEncoder->setVertexBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
 		jfaEncoder->setFragmentBuffer(jfaOffsetBuffer[currentFrameIndex][stage], 0, BufferIndexJFAParams);
@@ -558,9 +559,6 @@ void Engine::rcPass(MTL::CommandBuffer *commandBuffer) {
         }
         
         renderPass->colorAttachments()->object(0)->setTexture(currentRenderTarget);
-        renderPass->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionClear);
-        renderPass->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(0.0, 0.0, 0.0, 1.0));
-
         
         MTL::RenderCommandEncoder* renderCommandEncoder = commandBuffer->renderCommandEncoder(renderPass);
         

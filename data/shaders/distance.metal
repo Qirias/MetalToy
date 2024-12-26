@@ -13,7 +13,7 @@ fragment half4 fragment_distance(	VertexOut 		in 			[[stage_in]],
 	float2 uv = in.texCoords;
     uint2 resolution = uint2(frameData.width, frameData.height);
     
-    half4 nearestSeed = jfaTexture.sample(samplerLinear, uv);
+    half4 nearestSeed = jfaTexture.sample(samplerNearest, uv);
     
 	float dist = clamp(distance(uv, float2(nearestSeed.xy)), 0.0, 1.0);
 

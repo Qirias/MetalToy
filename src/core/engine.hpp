@@ -115,14 +115,12 @@ private:
 	MTL::RenderPipelineState*   distanceRenderPipelineState;
 	MTL::RenderPipelineState*   compositionRenderPipelineState;
 
-    MTL::SamplerState*          samplerState;
-
     Camera                      camera;
 
     uint64_t                    frameNumber;
     uint8_t                     frameDataBufferIndex;
 	
     // Jump Flood Algorithm
-	uint8_t						jfaPasses;
+	int 						jfaPasses;
     uint8_t                     baseRayCount;
 };

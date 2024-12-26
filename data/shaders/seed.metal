@@ -13,6 +13,6 @@ fragment half4 fragment_seed(VertexOut 			in 			[[stage_in]],
 	float2 uv = in.texCoords;
     uint2 resolution = uint2(frameData.width, frameData.height);
 
-    float alpha = drawing.sample(samplerLinear, uv).a;
+    float alpha = drawing.sample(samplerNearest, uv).a;
 	return half4(uv.x*alpha, uv.y*alpha, 0.0, 1.0);
 }

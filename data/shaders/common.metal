@@ -2,11 +2,18 @@
 #include <metal_stdlib>
 using namespace metal;
 
-constexpr sampler samplerLinear(s_address::clamp_to_edge,
-                                t_address::clamp_to_edge,
-                                r_address::clamp_to_edge,
+constexpr sampler samplerLinear(s_address::clamp_to_zero,
+                                t_address::clamp_to_zero,
+                                r_address::clamp_to_zero,
                                 mag_filter::linear,
                                 min_filter::linear);
+
+constexpr sampler samplerNearest(s_address::clamp_to_zero,
+                                 t_address::clamp_to_zero,
+                                 r_address::clamp_to_zero,
+                                 mag_filter::nearest,
+                                 min_filter::nearest);
+
 
 struct VertexOut {
 	float4 position [[position]];
