@@ -17,12 +17,6 @@ half4 rayMarch(float2 uv, float2 resolution, texture2d<half> drawingTexture, tex
     
     bool firstLevel = rcData.cascadeIndex == 0.0;
     
-    if (firstLevel) {
-        half4 color = drawingTexture.sample(samplerNearest, uv);
-        if (color.a > 0.0)
-            return color;
-    }
-    
     float spacing = pow(sqrtBase, rcData.cascadeIndex);
     // Calculate the number of probes per x/y dimension
     float2 size = floor(resolution / spacing);
@@ -71,11 +65,17 @@ half4 rayMarch(float2 uv, float2 resolution, texture2d<half> drawingTexture, tex
 			
             if (outOfBounds(sampleUV)) break;
 			
-			if (dist <= minStepSize) {
+            if (dist <= minStepSize) {
                 half4 colorSample = drawingTexture.sample(samplerNearest, sampleUV);
-                radDelta += gammaCorrect(colorSample);
-				break;
-			}
+                if (colorSample.a > 0.0) {  // If we hit something opaque
+                    radDelta = gammaCorrect(colorSample);
+                    break;
+                }
+
+                sampleUV += rayDirection * minStepSize * scale;
+                traveled += minStepSize;
+                continue;
+            }
             
             traveled += dist;
             if (traveled >= intervalLength) break;
@@ -103,7 +103,7 @@ half4 rayMarch(float2 uv, float2 resolution, texture2d<half> drawingTexture, tex
 		radiance += radDelta;
     }
     
-	return radiance / float(rcData.base);
+	return half4(radiance.rgb / float(rcData.base), 1.0f);
 }
 
 fragment half4 fragment_composition(	VertexOut 			in 				[[stage_in]],
@@ -118,6 +118,14 @@ fragment half4 fragment_composition(	VertexOut 			in 				[[stage_in]],
     float2 coord = floor(uv * resolution);
     
     bool isLastLayer = rcData.rayCount == rcData.base;
+    bool firstLevel = rcData.cascadeIndex == 0.0;
+    
+    if (firstLevel) {
+        half4 color = drawingTexture.sample(samplerNearest, uv);
+        if (color.a > 0.0)
+            return color;
+    }
+    
     
     half4 rayMarchedColor = rayMarch(uv, resolution, drawingTexture, distanceTexture, lastTexture, rcData);
     

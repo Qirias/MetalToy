@@ -7,7 +7,7 @@ Engine::Engine()
 , currentFrameIndex(0)
 , pixelFormat(MTL::PixelFormatRGBA8Unorm)
 , jfaPasses(0)
-, baseRayCount(4) {
+, baseRayCount(16) {
 	inFlightSemaphore = dispatch_semaphore_create(MaxFramesInFlight);
 
     for (int i = 0; i < MaxFramesInFlight; i++) {
