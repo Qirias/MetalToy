@@ -58,11 +58,6 @@ fragment half4 fragment_drawing(	VertexOut 			in 				[[stage_in]],
         return half4(-1.0);
     }
 
-    if (frameData.mouseCoords.z <= 0.0f) {
-        // Return the current color without modifying it (output the last drawn texture)
-        return drawingTexture.sample(samplerLinear, uv);
-    }
-
     half4 currentColor = drawingTexture.sample(samplerLinear, uv);
 
     half4 newColor = draw(uv, normalizedCurrMouse, normalizedPrevMouse, 

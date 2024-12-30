@@ -97,7 +97,6 @@ void Engine::resizeFrameBuffer(int width, int height) {
     if (jfaTexture)         {   jfaTexture->release(); 		    jfaTexture = nullptr;       }
     if (seedTexture)        {   seedTexture->release();         seedTexture = nullptr;      }
     if (distanceTexture)    {   distanceTexture->release();     distanceTexture = nullptr;  }
-    
 	
 	createRenderPassDescriptor();
     metalDrawable = (__bridge CA::MetalDrawable*)[metalLayer nextDrawable];
@@ -107,7 +106,7 @@ void Engine::resizeFrameBuffer(int width, int height) {
 void Engine::initWindow() {
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindow = glfwCreateWindow(600, 600, "MetalToy", NULL, NULL);
+    glfwWindow = glfwCreateWindow(512, 512, "MetalToy", NULL, NULL);
     if (!glfwWindow) {
         glfwTerminate();
         exit(EXIT_FAILURE);
@@ -371,26 +370,26 @@ void Engine::updateRenderPassDescriptor() {
 
 #pragma mark drawTexture
 void Engine::drawTexture(MTL::CommandBuffer* commandBuffer) {
-	MTL::RenderPassDescriptor* drawingRenderPass = MTL::RenderPassDescriptor::alloc()->init();
-	drawingRenderPass->colorAttachments()->object(0)->setTexture(drawingTexture);
-	drawingRenderPass->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionLoad);
-	drawingRenderPass->colorAttachments()->object(0)->setStoreAction(MTL::StoreActionStore);
+	MTL::RenderPassDescriptor* renderPass = MTL::RenderPassDescriptor::alloc()->init();
+    renderPass->colorAttachments()->object(0)->setTexture(drawingTexture);
+    renderPass->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionLoad);
+    renderPass->colorAttachments()->object(0)->setStoreAction(MTL::StoreActionStore);
 
-	MTL::RenderCommandEncoder* drawingEncoder = commandBuffer->renderCommandEncoder(drawingRenderPass);
-	drawingEncoder->pushDebugGroup(NS::String::string("Drawing Render Pass", NS::ASCIIStringEncoding));
+    MTL::RenderCommandEncoder* renderCommandEncoder = commandBuffer->renderCommandEncoder(renderPass);
+    renderCommandEncoder->pushDebugGroup(NS::String::string("Drawing Render Pass", NS::ASCIIStringEncoding));
 	
-	drawingEncoder->setRenderPipelineState(drawingRenderPipelineState);
+    renderCommandEncoder->setRenderPipelineState(drawingRenderPipelineState);
 	
-	drawingEncoder->setVertexBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
-	drawingEncoder->setFragmentBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
-	drawingEncoder->setFragmentTexture(drawingTexture, TextureIndexDrawing);
+    renderCommandEncoder->setVertexBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
+    renderCommandEncoder->setFragmentBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
+    renderCommandEncoder->setFragmentTexture(drawingTexture, TextureIndexDrawing);
 	
-	drawingEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0, 3, 1);
+    renderCommandEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0, 3, 1);
 	
-	drawingEncoder->popDebugGroup();
-	drawingEncoder->endEncoding();
+    renderCommandEncoder->popDebugGroup();
+    renderCommandEncoder->endEncoding();
 	
-	drawingRenderPass->release();
+    renderPass->release();
 }
 
 #pragma mark drawSeed
@@ -427,62 +426,68 @@ void Engine::JFAPass(MTL::CommandBuffer* commandBuffer) {
 		false);
 	
 	desc->setUsage(MTL::TextureUsageShaderRead | MTL::TextureUsageShaderWrite | MTL::TextureUsageRenderTarget);
+    desc->setStorageMode(MTL::StorageModePrivate);
 	
 	MTL::Texture* renderA = metalDevice->newTexture(desc);
 	MTL::Texture* renderB = metalDevice->newTexture(desc);
 	
 	MTL::Texture* currentInput = seedTexture;
 	MTL::Texture* currentOutput = renderA;
+    MTL::Texture* lastUsedTexture = nullptr;
 	
-	MTL::RenderPassDescriptor* jfaRenderPass = MTL::RenderPassDescriptor::alloc()->init();
-    jfaRenderPass->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionClear);
-    jfaRenderPass->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(0.0, 0.0, 0.0, 1.0));
+	MTL::RenderPassDescriptor* renderPass = MTL::RenderPassDescriptor::alloc()->init();
+    renderPass->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionClear);
+    renderPass->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(0.0, 0.0, 0.0, 1.0));
 
     for (int stage = 0; stage < jfaPasses; ++stage) {
-		jfaRenderPass->colorAttachments()->object(0)->setTexture(currentOutput);
+        renderPass->colorAttachments()->object(0)->setTexture(currentOutput);
         if (stage > 0)
-            jfaRenderPass->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionLoad);
-        jfaRenderPass->colorAttachments()->object(0)->setStoreAction(MTL::StoreActionStore);
+            renderPass->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionLoad);
+        renderPass->colorAttachments()->object(0)->setStoreAction(MTL::StoreActionStore);
         
 		JFAParams* params = (JFAParams*)(jfaOffsetBuffer[currentFrameIndex][stage]->contents());
 
-		MTL::RenderCommandEncoder* jfaEncoder = commandBuffer->renderCommandEncoder(jfaRenderPass);
+		MTL::RenderCommandEncoder* renderCommandEncoder = commandBuffer->renderCommandEncoder(renderPass);
 		std::string labelStr = "Stage: " + std::to_string(stage);
 		NS::String* label = NS::String::string(labelStr.c_str(), NS::ASCIIStringEncoding);
-		jfaEncoder->setLabel(label);
+        renderCommandEncoder->setLabel(label);
 		
-		jfaEncoder->pushDebugGroup(NS::String::string("Jump Flood Algorithm Render Pass", NS::ASCIIStringEncoding));
-		jfaEncoder->setRenderPipelineState(jfaRenderPipelineState);
+        renderCommandEncoder->pushDebugGroup(NS::String::string("Jump Flood Algorithm Render Pass", NS::ASCIIStringEncoding));
+        renderCommandEncoder->setRenderPipelineState(jfaRenderPipelineState);
 		
         params->uOffset = pow(2.0, jfaPasses - stage - 1);
         params->skip = (jfaPasses == 0) ? 1 : 0;
         params->oneOverSize = simd::float2{1.0f / (float)metalDrawable->layer()->drawableSize().width, 1.0f / (float)metalDrawable->layer()->drawableSize().height};
 
-		jfaEncoder->setVertexBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
-		jfaEncoder->setFragmentBuffer(jfaOffsetBuffer[currentFrameIndex][stage], 0, BufferIndexJFAParams);
-        jfaEncoder->setFragmentBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
-		jfaEncoder->setFragmentTexture(currentInput, TextureIndexDrawing);
+        renderCommandEncoder->setVertexBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
+        renderCommandEncoder->setFragmentBuffer(jfaOffsetBuffer[currentFrameIndex][stage], 0, BufferIndexJFAParams);
+        renderCommandEncoder->setFragmentBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
+        renderCommandEncoder->setFragmentTexture(currentInput, TextureIndexDrawing);
 		
-		jfaEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0, 3, 1);
+        renderCommandEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0, 3, 1);
 		
-		jfaEncoder->popDebugGroup();
-		jfaEncoder->endEncoding();
+        renderCommandEncoder->popDebugGroup();
+        renderCommandEncoder->endEncoding();
 	
 		currentInput = currentOutput;
 		currentOutput = (currentOutput == renderA) ? renderB : renderA;
+        lastUsedTexture = currentInput;
 	}
 	
-
 	// Copy the final result to jfaTexture
-	MTL::BlitCommandEncoder* blitEncoder = commandBuffer->blitCommandEncoder();
-	MTL::Origin origin = MTL::Origin(0, 0, 0);
-	MTL::Size size = MTL::Size(jfaTexture->width(), jfaTexture->height(), 1);
-	blitEncoder->copyFromTexture(currentInput, 0, 0, origin, size, jfaTexture, 0, 0, origin);
-	blitEncoder->endEncoding();
+    MTL::BlitCommandEncoder* blitEncoder = commandBuffer->blitCommandEncoder();
+    MTL::Origin origin = MTL::Origin(0, 0, 0);
+    MTL::Size size = MTL::Size(jfaTexture->width(), jfaTexture->height(), 1);
+    blitEncoder->copyFromTexture(lastUsedTexture, 0, 0, origin, size, jfaTexture, 0, 0, origin);
+    blitEncoder->endEncoding();
 
-	renderA->release();
-	renderB->release();
-	jfaRenderPass->release();
+    // Add a completion handler to safely release resources
+    commandBuffer->addCompletedHandler(^void(MTL::CommandBuffer*) {
+        renderA->release();
+        renderB->release();
+    });
+
+    renderPass->release();
 }
 
 #pragma mark drawDistanceTexture
@@ -521,20 +526,23 @@ void Engine::rcPass(MTL::CommandBuffer *commandBuffer) {
         height,
         false);
     
-    desc->setUsage(MTL::TextureUsageShaderRead | MTL::TextureUsageShaderWrite | MTL::TextureUsageRenderTarget);
+    desc->setUsage(MTL::TextureUsageShaderRead | MTL::TextureUsageRenderTarget);
     
     MTL::Texture* rcRenderTargets[2];
     rcRenderTargets[0] = metalDevice->newTexture(desc);
     rcRenderTargets[1] = metalDevice->newTexture(desc);
     
     MTL::RenderPassDescriptor* renderPass = MTL::RenderPassDescriptor::alloc()->init();
+    renderPass->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionClear);
+    renderPass->colorAttachments()->object(0)->setClearColor(MTL::ClearColor(0.0, 0.0, 0.0, 1.0));
+    renderPass->colorAttachments()->object(0)->setStoreAction(MTL::StoreActionStore);
     
     const float diagonal = sqrtf(width * width + height * height);
     float cascadeCount = ceil(log(diagonal) / logf(baseRayCount)) + 1;
 
     cascadeCount = std::min(cascadeCount, static_cast<float>(NUM_OF_CASCADES));
     
-    MTL::Texture* lastMergeTexture = nullptr;
+    MTL::Texture* lastMergeTexture = nil;
     int pingPongIndex = 0;
     
     for (int cascade = cascadeCount - 1; cascade >= 0; cascade--) {
@@ -598,20 +606,20 @@ void Engine::rcPass(MTL::CommandBuffer *commandBuffer) {
 void Engine::performComposition(MTL::CommandBuffer* commandBuffer) {
 	renderPassDescriptor->colorAttachments()->object(0)->setTexture(metalDrawable->texture());
 
-	MTL::RenderCommandEncoder* compositionEncoder = commandBuffer->renderCommandEncoder(renderPassDescriptor);
-	compositionEncoder->pushDebugGroup(NS::String::string("Composition Render Pass", NS::ASCIIStringEncoding));
+	MTL::RenderCommandEncoder* renderCommandEncoder = commandBuffer->renderCommandEncoder(renderPassDescriptor);
+    renderCommandEncoder->pushDebugGroup(NS::String::string("Composition Render Pass", NS::ASCIIStringEncoding));
 	
-	compositionEncoder->setRenderPipelineState(compositionRenderPipelineState);
+    renderCommandEncoder->setRenderPipelineState(compositionRenderPipelineState);
 	
-	compositionEncoder->setVertexBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
-	compositionEncoder->setFragmentBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
-	compositionEncoder->setFragmentTexture(distanceTexture, TextureIndexDistance);
-	compositionEncoder->setFragmentTexture(drawingTexture, TextureIndexDrawing);
+    renderCommandEncoder->setVertexBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
+    renderCommandEncoder->setFragmentBuffer(frameDataBuffers[currentFrameIndex], 0, BufferIndexFrameData);
+    renderCommandEncoder->setFragmentTexture(distanceTexture, TextureIndexDistance);
+    renderCommandEncoder->setFragmentTexture(drawingTexture, TextureIndexDrawing);
 	
-	compositionEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0, 3, 1);
+    renderCommandEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, 0, 3, 1);
 	
-	compositionEncoder->popDebugGroup();
-	compositionEncoder->endEncoding();
+    renderCommandEncoder->popDebugGroup();
+    renderCommandEncoder->endEncoding();
 }
 
 #pragma mark draw

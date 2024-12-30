@@ -25,11 +25,12 @@ fragment half4 fragment_jfa(	VertexOut 		in 			[[stage_in]],
         for (float y = -1.0; y <= 1.0; y += 1.0) {
 			float2 sampleUV = uv + float2(x, y) * params.uOffset * params.oneOverSize;
 
-			if (outOfBounds(sampleUV)) {
+			if (sampleUV.x < 0.0 || sampleUV.x > 1.0 || sampleUV.y < 0.0 || sampleUV.y > 1.0) {
                 continue;
 			}
             
             float4 sampleValue = float4(inputTex.sample(samplerNearest, sampleUV));
+//            float4 sampleValue = float4(inputTex.read(uint2(float2(resolution)*sampleUV)));
 			float2 sampleSeed = float2(sampleValue.xy);
 //            sampleSeed = floor(sampleSeed * float2(resolution));
 

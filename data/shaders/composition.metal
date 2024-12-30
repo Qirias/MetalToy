@@ -8,15 +8,20 @@ using namespace metal;
 half4 rayMarch(float2 uv, float2 resolution, texture2d<half> drawingTexture, texture2d<half> distanceTexture, texture2d<half> lastTexture, rcParams rcData) {
     
     float2 coord = floor(uv * resolution);
-    float partial = 0.0;
     
-    float rayCount = pow(rcData.base, rcData.cascadeIndex + 1.0);
+    float rayCount = rcData.rayCount;
     float sqrtBase = sqrt(rcData.base);
     
     float oneOverRayCount = 1.0 / float(rayCount);
     float angleStepSize = TAU * oneOverRayCount;
     
     bool firstLevel = rcData.cascadeIndex == 0.0;
+    
+    if (firstLevel) {
+        half4 color = drawingTexture.sample(samplerNearest, uv);
+        if (color.a > 0.0)
+            return color;
+    }
     
     float spacing = pow(sqrtBase, rcData.cascadeIndex);
     // Calculate the number of probes per x/y dimension
@@ -44,6 +49,7 @@ half4 rayMarch(float2 uv, float2 resolution, texture2d<half> drawingTexture, tex
     float minStepSize = min(oneOverSize.x, oneOverSize.y) * 0.5;
     
     half4 radiance = half4(0.0);
+    float noise = rand(uv * (rcData.cascadeIndex + 1.0));
     
     for (int i = 0; i < int(rcData.base); i++) {
         float index = baseIndex + float(i);
@@ -67,9 +73,10 @@ half4 rayMarch(float2 uv, float2 resolution, texture2d<half> drawingTexture, tex
 			
 			if (dist <= minStepSize) {
                 half4 colorSample = drawingTexture.sample(samplerNearest, sampleUV);
-                radDelta += half4(half3(pow(colorSample.rgb, half3(2.2f))), colorSample.a);
+                radDelta += gammaCorrect(colorSample);
 				break;
 			}
+            
             traveled += dist;
             if (traveled >= intervalLength) break;
         }
@@ -90,7 +97,7 @@ half4 rayMarch(float2 uv, float2 resolution, texture2d<half> drawingTexture, tex
             float2 clamped = clamp(offset, float2(0.5), upperSize - 0.5);
             float2 upperUV = (upperPosition + clamped) / resolution;
             
-            radDelta += lastTexture.sample(samplerNearest, upperUV);
+            radDelta += lastTexture.sample(samplerLinear, upperUV);
         }
         
 		radiance += radDelta;
@@ -115,6 +122,5 @@ fragment half4 fragment_composition(	VertexOut 			in 				[[stage_in]],
     half4 rayMarchedColor = rayMarch(uv, resolution, drawingTexture, distanceTexture, lastTexture, rcData);
     
     rayMarchedColor = (!isLastLayer ? rayMarchedColor : gammaCorrect(rayMarchedColor));
-    
 	return rayMarchedColor;
 }

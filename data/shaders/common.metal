@@ -56,7 +56,6 @@ static half4 sampleTexture(texture2d<half, access::read_write> tex, float2 uv) {
     return tex.read(pixelCoord);
 }
 
-
 // Constants
 constant float PI = 3.14159265;
 constant float TAU = 6.2831853072;

@@ -23,7 +23,7 @@
 #include <simd/simd.h>
 #include <filesystem>
 
-constexpr uint8_t MaxFramesInFlight = 3;
+constexpr uint8_t MaxFramesInFlight = 1;
 constexpr uint8_t MAXSTAGES = 12;
 constexpr uint8_t NUM_OF_CASCADES = 10;
 
