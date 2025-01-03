@@ -26,6 +26,7 @@ static half4 draw(float2 uv
     // If any of the digits 1-7 are pressed, select the corresponding color
     for (int i = 0; i < 7; ++i) {
         if (digits & (1 << i)) {
+           
             trailColor = colors[i];
             break;
         }
@@ -43,6 +44,17 @@ static half4 draw(float2 uv
     
     return col;
 }
+
+static half4 drawCircle(float2 uv, float2 center, float radius, half4 circleColor, half4 currentColor) {
+    float dist = length(uv - center) - radius;
+
+    if (dist <= 0.0) {
+        return circleColor;
+    }
+    
+    return currentColor;
+}
+
 
 fragment half4 fragment_drawing(	VertexOut 			in 				[[stage_in]],
 									texture2d<half> 	drawingTexture  [[texture(TextureIndexDrawing)]],
@@ -63,6 +75,20 @@ fragment half4 fragment_drawing(	VertexOut 			in 				[[stage_in]],
     half4 newColor = draw(uv, normalizedCurrMouse, normalizedPrevMouse, 
                           frameData.mouseCoords.z, frameData.mouseCoords.w, 
                           currentColor, frameData.keyboardDigits);
+    
+//    const float dotRadius = 0.03;
+//    
+//    newColor = drawCircle(uv, float2(0.5), dotRadius, half4(1, 0.647, 0, 1), newColor);
+//    
+//    const float radius = 0.3;
+//    const float2 center = float2(0.5);
+//
+//    for (int i = 0; i < 8; i++) {
+//        float angle = (TAU / 8.0) * float(i);
+//        float2 offset = float2(cos(angle), sin(angle)) * radius;
+//        float2 dotPosition = center + offset;
+//        newColor = drawCircle(uv, dotPosition, dotRadius, half4(0, 0, 0, 1), newColor);
+//    }
 	
 	return newColor;
 }

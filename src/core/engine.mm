@@ -5,9 +5,9 @@ Engine::Engine()
 , lastFrame(0.0f)
 , frameNumber(0)
 , currentFrameIndex(0)
-, pixelFormat(MTL::PixelFormatRGBA8Unorm)
+, pixelFormat(MTL::PixelFormatRGBA16Float)
 , jfaPasses(0)
-, baseRayCount(16) {
+, baseRayCount(4) {
 	inFlightSemaphore = dispatch_semaphore_create(MaxFramesInFlight);
 
     for (int i = 0; i < MaxFramesInFlight; i++) {
@@ -118,7 +118,7 @@ void Engine::initWindow() {
     metalWindow = glfwGetCocoaWindow(glfwWindow);
     metalLayer = [CAMetalLayer layer];
     metalLayer.device = (__bridge id<MTLDevice>)metalDevice;
-    metalLayer.pixelFormat = MTLPixelFormatRGBA8Unorm;
+    metalLayer.pixelFormat = MTLPixelFormatRGBA16Float;
     metalLayer.drawableSize = CGSizeMake(width, height);
     metalWindow.contentView.layer = metalLayer;
     metalWindow.contentView.wantsLayer = YES;

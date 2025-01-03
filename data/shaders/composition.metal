@@ -16,6 +16,7 @@ half4 rayMarch(float2 uv, float2 resolution, texture2d<half> drawingTexture, tex
     float angleStepSize = TAU * oneOverRayCount;
     
     bool firstLevel = rcData.cascadeIndex == 0.0;
+    bool lastLevel = rcData.cascadeIndex == rcData.cascadeCount-1;
     
     float spacing = pow(sqrtBase, rcData.cascadeIndex);
     // Calculate the number of probes per x/y dimension
@@ -35,8 +36,8 @@ half4 rayMarch(float2 uv, float2 resolution, texture2d<half> drawingTexture, tex
     // Hand-wavy rule that improved smoothing of other base ray counts
     float modifierHack = rcData.base < 16.0 ? 1.0 : 4.0;
 
-    float intervalStart = firstLevel ? 0.0 : (modifierHack * pow(rcData.base, rcData.cascadeIndex - 1.0)) / shortestSide;
-    float intervalLength = (modifierHack * pow(rcData.base, rcData.cascadeIndex)) / shortestSide;
+    float intervalStart = firstLevel ? 0.0 : (pow(rcData.base, rcData.cascadeIndex - 1.0) / shortestSide);
+    float intervalLength = (pow(rcData.base, rcData.cascadeIndex+1) / shortestSide);
 
     float baseIndex = float(rcData.base) * (rayPos.x + (spacing * rayPos.y));
 
@@ -60,15 +61,15 @@ half4 rayMarch(float2 uv, float2 resolution, texture2d<half> drawingTexture, tex
         for (int step = 1; step < maxSteps && !dontStart; step++) {
             
 			float dist = distanceTexture.sample(samplerNearest, sampleUV).x;
-			
+
 			sampleUV += rayDirection * dist * scale;
 			
             if (outOfBounds(sampleUV)) break;
 			
             if (dist <= minStepSize) {
                 half4 colorSample = drawingTexture.sample(samplerNearest, sampleUV);
-                if (colorSample.a > 0.0) {  // If we hit something opaque
-                    radDelta = gammaCorrect(colorSample);
+                if (colorSample.a == 1.0) {  // If we hit something opaque
+                    radDelta = colorSample;
                     break;
                 }
 
@@ -97,7 +98,7 @@ half4 rayMarch(float2 uv, float2 resolution, texture2d<half> drawingTexture, tex
             float2 clamped = clamp(offset, float2(0.5), upperSize - 0.5);
             float2 upperUV = (upperPosition + clamped) / resolution;
             
-            radDelta += lastTexture.sample(samplerLinear, upperUV);
+            radDelta = lastTexture.sample(samplerLinear, upperUV);
         }
         
 		radiance += radDelta;
