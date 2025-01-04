@@ -1,24 +1,5 @@
-# MetalToy
-Texture on a full-screen triangle renderer.
+# Vanilla Radiance Cascades 2D
 
-## Build Instructions
-### Prerequisites
-
-Before you start, install **CMake**
-### Build 
-```bash
-git clone https://github.com/Qirias/MetalToy
-cd MetalToy
-```
-### Xcode
-```bash
-chmod +x xcode.sh
-./xcode.sh
-open build_xcode/MetalToy.xcodeproj
-```
-
-### Standalone
-```bash
-chmod +x standalone.sh
-./standalone.sh
-```
+<div align="center">
+  <img src="data/screenshots/radiancecascades.png" alt="Thumbnail">
+</div>
