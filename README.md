@@ -1,5 +1,9 @@
 # MetalToy
-Texture on a full-screen triangle renderer.
+A shader toy for the Metal API.
+
+<div align="center">
+  <img src="data/screenshots/thumbnail.png" alt="Thumbnail">
+</div>
 
 ## Build Instructions
 ### Prerequisites

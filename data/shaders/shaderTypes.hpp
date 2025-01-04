@@ -10,19 +10,6 @@ struct FrameData {
 	uint64_t frameCount;						// 8 bytes  (offset: 48)
 };
 
-struct JFAParams {
-    float2 oneOverSize;
-    float uOffset;
-    int skip;
-};
-
-struct rcParams {
-    float rayCount;
-    float base;
-    float cascadeIndex;
-    float cascadeCount;
-};
-
 typedef enum BufferIndex {
 	BufferIndexFrameData = 0,
 	BufferIndexJFAParams = 1,
