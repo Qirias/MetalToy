@@ -23,9 +23,7 @@
 #include <simd/simd.h>
 #include <filesystem>
 
-constexpr uint8_t MaxFramesInFlight = 1;
-constexpr uint8_t MAXSTAGES = 12;
-constexpr uint8_t NUM_OF_CASCADES = 10;
+constexpr uint8_t MaxFramesInFlight = 3;
 
 
 class Engine {
@@ -50,10 +48,6 @@ private:
     void presentTexture(MTL::RenderCommandEncoder* renderCommandEncoder);
 
 	void drawTexture(MTL::CommandBuffer* commandBuffer);
-	void drawSeed(MTL::CommandBuffer* commandBuffer);
-	void JFAPass(MTL::CommandBuffer* commandBuffer);
-	void drawDistanceTexture(MTL::CommandBuffer* commandBuffer);
-    void rcPass(MTL::CommandBuffer* commandBuffer);
 	void performComposition(MTL::CommandBuffer* commandBuffer);
 
 	void createRenderPassDescriptor();
@@ -77,8 +71,6 @@ private:
 	
 	// Buffers used to store dynamically changing per-frame data
 	MTL::Buffer* 							frameDataBuffers[MaxFramesInFlight];
-	std::vector<std::vector<MTL::Buffer*>> 	jfaOffsetBuffer;
-    std::vector<std::vector<MTL::Buffer*>>  rcBuffer;
     
 
     MTL::Device*        metalDevice;
@@ -100,9 +92,6 @@ private:
     MTL::RenderPassDescriptor*  renderPassDescriptor;
 
     MTL::Texture*               drawingTexture;
-	MTL::Texture*				seedTexture;
-    MTL::Texture*               jfaTexture;
-	MTL::Texture*               distanceTexture;
     MTL::PixelFormat            pixelFormat;
 
     MTL::Library*               metalDefaultLibrary;
@@ -110,17 +99,10 @@ private:
 
 	// Render Pipeline States
 	MTL::RenderPipelineState*   drawingRenderPipelineState;
-	MTL::RenderPipelineState*   seedRenderPipelineState;
-	MTL::RenderPipelineState*   jfaRenderPipelineState;
-	MTL::RenderPipelineState*   distanceRenderPipelineState;
 	MTL::RenderPipelineState*   compositionRenderPipelineState;
 
     Camera                      camera;
 
     uint64_t                    frameNumber;
     uint8_t                     frameDataBufferIndex;
-	
-    // Jump Flood Algorithm
-	int 						jfaPasses;
-    uint8_t                     baseRayCount;
 };
