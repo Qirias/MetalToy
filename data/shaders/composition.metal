@@ -16,7 +16,7 @@ half4 rayMarch(float2 uv, float2 resolution, texture2d<half> drawingTexture, tex
     float angleStepSize = TAU * oneOverRayCount;
     
     bool firstLevel = rcData.cascadeIndex == 0.0;
-    bool lastLevel = rcData.cascadeIndex == rcData.cascadeCount-1;
+//    bool lastLevel = rcData.cascadeIndex == rcData.cascadeCount-1;
     
     float spacing = pow(sqrtBase, rcData.cascadeIndex);
     // Calculate the number of probes per x/y dimension
@@ -34,7 +34,7 @@ half4 rayMarch(float2 uv, float2 resolution, texture2d<half> drawingTexture, tex
     float2 scale = shortestSide * oneOverSize;
     
     // Hand-wavy rule that improved smoothing of other base ray counts
-    float modifierHack = rcData.base < 16.0 ? 1.0 : 4.0;
+//    float modifierHack = rcData.base < 16.0 ? 1.0 : 4.0;
 
     float intervalStart = firstLevel ? 0.0 : (pow(rcData.base, rcData.cascadeIndex - 1.0) / shortestSide);
     float intervalLength = (pow(rcData.base, rcData.cascadeIndex+1) / shortestSide);
@@ -44,7 +44,7 @@ half4 rayMarch(float2 uv, float2 resolution, texture2d<half> drawingTexture, tex
     float minStepSize = min(oneOverSize.x, oneOverSize.y) * 0.5;
     
     half4 radiance = half4(0.0);
-    float noise = rand(uv * (rcData.cascadeIndex + 1.0));
+//    float noise = rand(uv * (rcData.cascadeIndex + 1.0));
     
     for (int i = 0; i < int(rcData.base); i++) {
         float index = baseIndex + float(i);
