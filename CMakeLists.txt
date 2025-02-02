@@ -1,5 +1,12 @@
 cmake_minimum_required(VERSION 3.15)
-project(MetalToy)
+
+if(STANDALONE_BUILD)
+    project(Metallagmenos LANGUAGES CXX OBJCXX)
+elseif(XCODE_BUILD)
+    project(MetalToy)
+else()
+    message(STATUS "Unknown build mode")
+endif()
 
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 20)
@@ -7,13 +14,33 @@ set(CMAKE_CXX_STANDARD 20)
 # Group sources into virtual folders for Xcode
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
+# set(IMGUI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/imgui")
+# set(IMGUI_SOURCES
+#     ${IMGUI_DIR}/imgui.cpp
+#     ${IMGUI_DIR}/imgui_demo.cpp
+#     ${IMGUI_DIR}/imgui_draw.cpp
+#     ${IMGUI_DIR}/imgui_tables.cpp
+#     ${IMGUI_DIR}/imgui_widgets.cpp
+#     ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
+#     ${IMGUI_DIR}/backends/imgui_impl_metal.mm
+# )
+
+# # Set properties for Objective-C++ files
+# set_source_files_properties(
+#     ${IMGUI_DIR}/backends/imgui_impl_metal.mm
+#     PROPERTIES
+#     COMPILE_FLAGS "-x objective-c++"
+#     LANGUAGE OBJCXX
+# )
+
 # Glob all source files in src and libs
-file(GLOB_RECURSE SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.mm"
+file(GLOB_RECURSE SOURCES 
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp" 
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp" 
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.mm" 
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/external/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/external/*.mm"
     "${CMAKE_CURRENT_SOURCE_DIR}/external/*.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/external/*.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/data/shaders/*.hpp"
@@ -26,7 +53,13 @@ source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCES})
 file(GLOB SHADER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/data/shaders/*.metal")
 
 # Set texture path as a definition
-add_definitions(-DTEXTURE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/textures")
+# add_definitions(-DTEXTURE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/textures")
+# add_definitions(-DMODELS_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/models")
+# add_definitions(-DSCENES_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/scenes")
+
+# tiny_glTF doesn't need to compile stb_image again
+add_definitions(-DTINYGLTF_NO_STB_IMAGE -DTINYGLTF_NO_STB_IMAGE_WRITE)
+add_definitions(-DIMGUI_IMPL_METAL_CPP)
 
 # Create source groups for Xcode
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCES} ${SHADER_SOURCES})
@@ -53,8 +86,6 @@ foreach(SHADER_SOURCE ${SHADER_SOURCES})
                 -I ${CMAKE_CURRENT_SOURCE_DIR}/src/core
                 -Wno-unused-variable
                 -Wno-unused-function
-                # -gline-tables-only
-                # -frecord-sources=flat
         DEPENDS ${SHADER_SOURCE}  # Add each shader source as a dependency
         COMMENT "Compiling ${SHADER_NAME}.metal to AIR"
     )
@@ -79,6 +110,25 @@ set_target_properties(shaders PROPERTIES FOLDER "Hidden")
 # Add the executable target
 add_executable(${PROJECT_NAME} ${SOURCES} ${SHADER_SOURCES})
 
+# Check if it's a standalone build or an Xcode build
+if(DEFINED STANDALONE_BUILD)
+    message(STATUS "Building as standalone")
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        MACOSX_BUNDLE FALSE   
+        XCODE_GENERATE_SCHEME FALSE
+    )
+elseif(DEFINED XCODE_BUILD)
+    message(STATUS "Building with Xcode")
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        MACOSX_BUNDLE TRUE 
+        XCODE_GENERATE_SCHEME TRUE
+        XCODE_SCHEME_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        XCODE_SCHEME_LAUNCH_MODE "0"  # Prevent multiple executables
+    )
+else()
+    message(STATUS "Unknown build mode")
+endif()
+
 # Set the Xcode specific attributes
 set_target_properties(${PROJECT_NAME} PROPERTIES
     XCODE_GENERATE_SCHEME TRUE
@@ -96,11 +146,14 @@ set_source_files_properties(src/main.mm PROPERTIES LANGUAGE CXX)
 target_link_libraries(${PROJECT_NAME} PRIVATE METAL_CPP)
 
 # Include directories for Metal-CPP headers and your project headers
-target_include_directories(${PROJECT_NAME} PRIVATE
+target_include_directories(${PROJECT_NAME} PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}/metal-cmake/metal-cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core
     ${CMAKE_CURRENT_SOURCE_DIR}/src/math
+    # ${CMAKE_CURRENT_SOURCE_DIR}/src/editor
     ${CMAKE_CURRENT_SOURCE_DIR}/external
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
 )
 
 # Link the GLFW library
